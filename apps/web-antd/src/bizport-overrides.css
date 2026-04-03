@@ -1,0 +1,8 @@
+/* BizPort admin pages: keep inline search form readable when wrapping */
+.ant-card .ant-form-inline {
+  row-gap: 12px;
+}
+
+.ant-card .ant-form-inline .ant-form-item {
+  margin-bottom: 12px;
+}
