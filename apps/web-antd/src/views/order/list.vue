@@ -5,6 +5,7 @@ import type {
   CustomerItem,
   OrderDetailRes,
   OrderListItem,
+  OrderPaymentStatus,
   OrderStatus,
   ProductDetailRes,
   ProductListItem,
@@ -31,6 +32,7 @@ import {
   Select,
   Space,
   Steps,
+  Switch,
   Table,
   Tag,
 } from 'ant-design-vue';
@@ -78,6 +80,7 @@ const productDetailCache = reactive<Record<number, ProductDetailRes>>({});
 const filters = reactive({
   customerName: '',
   orderNo: '',
+  paymentStatus: undefined as string | undefined,
   status: undefined as string | undefined,
 });
 
@@ -87,6 +90,8 @@ const pagination = reactive({
 });
 
 const shipForm = reactive({
+  forceShip: false,
+  forceShipReason: '',
   shippingCompany: '',
   shippingNo: '',
 });
@@ -122,30 +127,48 @@ const createOrderForm = reactive({
 });
 
 const statusOptions = [
-  { label: '待付款', value: 'PENDING_PAYMENT' },
-  { label: '待发货', value: 'PENDING_SHIPMENT' },
+  { label: '已创建', value: 'CREATED' },
   { label: '已发货', value: 'SHIPPED' },
   { label: '已完成', value: 'COMPLETED' },
   { label: '已取消', value: 'CANCELLED' },
 ];
 
+const paymentStatusOptions = [
+  { label: '未付款', value: 'UNPAID' },
+  { label: '部分付款', value: 'PARTIALLY_PAID' },
+  { label: '已付清', value: 'FULLY_PAID' },
+];
+
 const statusColorMap: Record<OrderStatus, string> = {
   CANCELLED: 'default',
   COMPLETED: 'success',
-  PENDING_PAYMENT: 'warning',
-  PENDING_SHIPMENT: 'processing',
+  CREATED: 'processing',
   SHIPPED: 'blue',
 };
 
 const statusTextMap: Record<OrderStatus, string> = {
   CANCELLED: '已取消',
   COMPLETED: '已完成',
-  PENDING_PAYMENT: '待付款',
-  PENDING_SHIPMENT: '待发货',
+  CREATED: '已创建',
   SHIPPED: '已发货',
 };
 
+const paymentStatusColorMap: Record<OrderPaymentStatus, string> = {
+  FULLY_PAID: 'success',
+  PARTIALLY_PAID: 'warning',
+  UNPAID: 'default',
+};
+
+const paymentStatusTextMap: Record<OrderPaymentStatus, string> = {
+  FULLY_PAID: '已付清',
+  PARTIALLY_PAID: '部分付款',
+  UNPAID: '未付款',
+};
+
 const canShip = computed(() => accessStore.accessCodes.includes('order:ship'));
+const canForceShip = computed(() =>
+  accessStore.accessCodes.includes('order:ship:force'),
+);
 const canComplete = computed(() =>
   accessStore.accessCodes.includes('order:complete'),
 );
@@ -206,9 +229,10 @@ const columns = [
   { dataIndex: 'contactPerson', key: 'contactPerson', title: '联系人' },
   { dataIndex: 'contactPhone', key: 'contactPhone', title: '联系电话' },
   { dataIndex: 'finalAmount', key: 'finalAmount', title: '实付金额' },
-  { dataIndex: 'status', key: 'status', title: '状态' },
+  { dataIndex: 'status', key: 'status', title: '履约状态' },
+  { dataIndex: 'paymentStatus', key: 'paymentStatus', title: '支付状态' },
   { dataIndex: 'createdAt', key: 'createdAt', title: '创建时间' },
-  { key: 'actions', title: '操作', width: 300 },
+  { key: 'actions', title: '操作', width: 340 },
 ];
 
 const createOrderColumns = [
@@ -428,6 +452,7 @@ async function loadOrderList() {
       customerName: filters.customerName || undefined,
       orderNo: filters.orderNo || undefined,
       page: pagination.current,
+      paymentStatus: filters.paymentStatus,
       size: pagination.pageSize,
       status: filters.status,
     });
@@ -446,6 +471,7 @@ function onSearch() {
 function onReset() {
   filters.customerName = '';
   filters.orderNo = '';
+  filters.paymentStatus = undefined;
   filters.status = undefined;
   pagination.current = 1;
   loadOrderList();
@@ -464,6 +490,8 @@ async function openDetail(orderId: number) {
 function openShipModal(order: OrderListItem) {
   currentOrderId.value = order.id;
   currentOrderNo.value = order.orderNo;
+  shipForm.forceShip = false;
+  shipForm.forceShipReason = '';
   shipForm.shippingCompany = '';
   shipForm.shippingNo = '';
   shipOpen.value = true;
@@ -491,6 +519,8 @@ async function submitShip() {
   shipLoading.value = true;
   try {
     await confirmShipmentApi({
+      forceShip: shipForm.forceShip || undefined,
+      forceShipReason: shipForm.forceShipReason || undefined,
       orderId: currentOrderId.value,
       shippingCompany: shipForm.shippingCompany || undefined,
       shippingNo: shipForm.shippingNo || undefined,
@@ -587,6 +617,15 @@ loadOrderList();
             style="width: 180px"
           />
         </Form.Item>
+        <Form.Item label="支付状态">
+          <Select
+            v-model:value="filters.paymentStatus"
+            :options="paymentStatusOptions"
+            allow-clear
+            placeholder="请选择支付状态"
+            style="width: 180px"
+          />
+        </Form.Item>
         <Form.Item>
           <Space>
             <Button
@@ -653,6 +692,25 @@ loadOrderList();
               }}
             </Tag>
           </template>
+          <template v-else-if="column.key === 'paymentStatus'">
+            <Tag
+              v-if="(record as OrderListItem).paymentStatus"
+              :color="
+                paymentStatusColorMap[
+                  (record as OrderListItem)
+                    .paymentStatus as keyof typeof paymentStatusColorMap
+                ]
+              "
+            >
+              {{
+                paymentStatusTextMap[
+                  (record as OrderListItem)
+                    .paymentStatus as keyof typeof paymentStatusTextMap
+                ] ?? (record as OrderListItem).paymentStatus
+              }}
+            </Tag>
+            <Tag v-else color="default">-</Tag>
+          </template>
 
           <template v-else-if="column.key === 'actions'">
             <Space>
@@ -667,13 +725,22 @@ loadOrderList();
               <Button
                 v-if="
                   canShip &&
-                  (record as OrderListItem).status === 'PENDING_SHIPMENT'
+                  (record as OrderListItem).status === 'CREATED' &&
+                  ((record as OrderListItem).paymentStatus ===
+                    'PARTIALLY_PAID' ||
+                    (record as OrderListItem).paymentStatus === 'FULLY_PAID' ||
+                    canForceShip)
                 "
                 size="small"
                 type="link"
                 @click="openShipModal(record as OrderListItem)"
               >
-                确认发货
+                {{
+                  (record as OrderListItem).paymentStatus === 'UNPAID' &&
+                  canForceShip
+                    ? '强制发货'
+                    : '确认发货'
+                }}
               </Button>
 
               <Popconfirm
@@ -689,8 +756,8 @@ loadOrderList();
               <Popconfirm
                 v-if="
                   canCancel &&
-                  ((record as OrderListItem).status === 'PENDING_PAYMENT' ||
-                    (record as OrderListItem).status === 'PENDING_SHIPMENT')
+                  (record as OrderListItem).status === 'CREATED' &&
+                  (record as OrderListItem).paymentStatus === 'UNPAID'
                 "
                 title="确认取消该订单？"
                 @confirm="doCancel((record as OrderListItem).id)"
@@ -700,8 +767,8 @@ loadOrderList();
               <Button
                 v-if="
                   canHold &&
-                  ((record as OrderListItem).status === 'PENDING_PAYMENT' ||
-                    (record as OrderListItem).status === 'PENDING_SHIPMENT')
+                  (record as OrderListItem).status === 'CREATED' &&
+                  (record as OrderListItem).paymentStatus === 'UNPAID'
                 "
                 size="small"
                 type="link"
@@ -754,6 +821,18 @@ loadOrderList();
             >
               {{ statusTextMap[detailData.status] ?? detailData.status }}
             </Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label="支付状态">
+            <Tag
+              v-if="detailData.paymentStatus"
+              :color="paymentStatusColorMap[detailData.paymentStatus]"
+            >
+              {{
+                paymentStatusTextMap[detailData.paymentStatus] ??
+                detailData.paymentStatus
+              }}
+            </Tag>
+            <span v-else>-</span>
           </Descriptions.Item>
           <Descriptions.Item label="客户">
             {{ detailData.customerName }}
@@ -812,6 +891,21 @@ loadOrderList();
       @ok="submitShip"
     >
       <Form layout="vertical">
+        <Form.Item v-if="canForceShip" label="强制发货">
+          <div class="flex items-center gap-3">
+            <Switch v-model:checked="shipForm.forceShip" />
+            <span class="text-xs text-gray-500">
+              未付款订单仅可通过强制发货放行
+            </span>
+          </div>
+        </Form.Item>
+        <Form.Item v-if="shipForm.forceShip" label="强制发货原因" required>
+          <Input
+            v-model:value="shipForm.forceShipReason"
+            allow-clear
+            placeholder="请填写特批发货原因"
+          />
+        </Form.Item>
         <Form.Item label="物流公司">
           <Input
             v-model:value="shipForm.shippingCompany"

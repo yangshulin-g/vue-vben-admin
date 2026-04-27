@@ -78,6 +78,60 @@ export interface LogItem {
   username?: string;
 }
 
+export interface FileAssetItem {
+  assetName?: string;
+  assetType?: string;
+  bizType?: string;
+  bucketOrContainer?: string;
+  contentType?: string;
+  createdAt?: string;
+  fileExt?: string;
+  fileSize?: number;
+  id: number;
+  objectKey?: string;
+  provider?: string;
+  remark?: string;
+  uploadedBy?: number;
+  uploadedByName?: string;
+  uploadedByType?: string;
+  url?: string;
+}
+
+export type FileAssetDetail = FileAssetItem;
+
+export interface StorageConfigDetail {
+  provider?: string;
+  restartRequired?: boolean;
+  local: {
+    basePath?: string;
+    urlPrefix?: string;
+  };
+  aliyun: {
+    accessKeyId?: string;
+    accessKeySecret?: string;
+    bucket?: string;
+    dirPrefix?: string;
+    domain?: string;
+    endpoint?: string;
+  };
+  tencent: {
+    bucket?: string;
+    dirPrefix?: string;
+    domain?: string;
+    region?: string;
+    secretId?: string;
+    secretKey?: string;
+  };
+  minio: {
+    accessKey?: string;
+    bucket?: string;
+    dirPrefix?: string;
+    domain?: string;
+    endpoint?: string;
+    secretKey?: string;
+  };
+}
+
 export async function getAdminListApi(
   data: PageReq & { status?: number; username?: string },
 ) {
@@ -263,6 +317,84 @@ export async function getOperationLogApi(
 ) {
   return requestClient.post<SystemPageRes<LogItem>>(
     '/api/v1/system/log/list',
+    data,
+  );
+}
+
+export async function getFileAssetListApi(
+  data: PageReq & {
+    assetName?: string;
+    assetType?: string;
+    bizType?: string;
+    endDate?: string;
+    provider?: string;
+    startDate?: string;
+  },
+) {
+  return requestClient.post<SystemPageRes<FileAssetItem>>(
+    '/api/v1/system/file-asset/list',
+    data,
+  );
+}
+
+export async function getFileAssetDetailApi(data: { id: number }) {
+  return requestClient.post<FileAssetDetail>(
+    '/api/v1/system/file-asset/detail',
+    data,
+  );
+}
+
+export async function uploadFileAssetApi(
+  file: Blob | File,
+  data?: {
+    remark?: string;
+    type?: string;
+  },
+) {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (data?.type) {
+    formData.append('type', data.type);
+  }
+  if (data?.remark) {
+    formData.append('remark', data.remark);
+  }
+
+  return requestClient.post<FileAssetDetail>(
+    '/api/v1/system/file-asset/upload',
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    },
+  );
+}
+
+export async function deleteFileAssetApi(data: { id: number }) {
+  return requestClient.post<{ success?: boolean }>(
+    '/api/v1/system/file-asset/delete',
+    data,
+  );
+}
+
+export async function getStorageConfigDetailApi() {
+  return requestClient.post<StorageConfigDetail>(
+    '/api/v1/system/storage-config/detail',
+    {},
+  );
+}
+
+export async function updateStorageConfigApi(data: StorageConfigDetail) {
+  return requestClient.post<{ success?: boolean }>(
+    '/api/v1/system/storage-config/update',
+    data,
+  );
+}
+
+export async function testStorageConfigApi(data: StorageConfigDetail) {
+  return requestClient.post<{ success?: boolean }>(
+    '/api/v1/system/storage-config/test',
     data,
   );
 }

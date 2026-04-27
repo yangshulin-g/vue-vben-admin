@@ -3,6 +3,7 @@ import { requestClient } from '#/api/request';
 export interface CustomerListReq {
   page: number;
   size: number;
+  status?: number;
 }
 
 export interface CustomerItem {
@@ -23,6 +24,31 @@ export interface CustomerItem {
 
 export interface CustomerDetailRes extends CustomerItem {
   id: number;
+}
+
+export interface CustomerAccountDetailRes {
+  createdAt?: string;
+  customerId: number;
+  customerUserId?: number;
+  opened?: boolean;
+  phone?: string;
+  status?: number;
+  username?: string;
+}
+
+export interface CreateCustomerAccountRes {
+  customerId?: number;
+  initialPassword?: string;
+  phone?: string;
+  success?: boolean;
+  username?: string;
+}
+
+export interface ResetCustomerAccountPasswordRes {
+  customerId?: number;
+  newPassword?: string;
+  success?: boolean;
+  username?: string;
 }
 
 /** 后端列表项常只返回 id，统一为 customerId，供下拉框 value 使用 */
@@ -197,6 +223,41 @@ export async function getCustomerDetailApi(data: { id: number }) {
     CustomerDetailRes & { customerId?: number }
   >('/api/v1/customer/detail', data);
   return normalizeCustomerRow(res) as CustomerDetailRes;
+}
+
+export async function getCustomerAccountDetailApi(data: {
+  customerId: number;
+}) {
+  return requestClient.post<CustomerAccountDetailRes>(
+    '/api/v1/customer/account/detail',
+    data,
+  );
+}
+
+export async function createCustomerAccountApi(data: { customerId: number }) {
+  return requestClient.post<CreateCustomerAccountRes>(
+    '/api/v1/customer/account/create',
+    data,
+  );
+}
+
+export async function updateCustomerAccountStatusApi(data: {
+  customerId: number;
+  status: number;
+}) {
+  return requestClient.post<{ success?: boolean }>(
+    '/api/v1/customer/account/status/update',
+    data,
+  );
+}
+
+export async function resetCustomerAccountPasswordApi(data: {
+  customerId: number;
+}) {
+  return requestClient.post<ResetCustomerAccountPasswordRes>(
+    '/api/v1/customer/account/password/reset',
+    data,
+  );
 }
 
 export async function getCustomerGroupDetailApi(data: { id: number }) {

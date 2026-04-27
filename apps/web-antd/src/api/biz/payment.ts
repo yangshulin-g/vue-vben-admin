@@ -9,6 +9,10 @@ export interface PaymentReconciliationReq {
 export interface ReconciliationPaymentItem {
   id?: number;
   amount?: number;
+  auditAt?: string;
+  auditBy?: number;
+  auditRemark?: string;
+  auditStatus?: string;
   paymentMethod?: string;
   paymentSn?: string;
   paymentStatus?: string;
@@ -23,6 +27,7 @@ export interface ReconciliationRes {
   orderId: number;
   orderNo?: string;
   paidAmount?: number;
+  paymentStatus?: string;
   paymentSummaryStatus?: string;
   payments?: ReconciliationPaymentItem[];
   totalAmount?: number;
@@ -71,13 +76,38 @@ export async function updatePaymentRecordApi(data: {
   id: number;
   paymentMethod: string;
   paymentSn?: string;
-  paymentStatus: string;
-  paymentTime?: string;
   remark?: string;
   voucherUrl?: string;
 }) {
   return requestClient.post<{ success?: boolean }>(
     '/api/v1/payment/update',
+    data,
+  );
+}
+
+export async function approvePaymentApi(data: {
+  auditRemark?: string;
+  id: number;
+}) {
+  return requestClient.post<{ success?: boolean }>(
+    '/api/v1/payment/audit/approve',
+    data,
+  );
+}
+
+export async function rejectPaymentApi(data: {
+  auditRemark?: string;
+  id: number;
+}) {
+  return requestClient.post<{ success?: boolean }>(
+    '/api/v1/payment/audit/reject',
+    data,
+  );
+}
+
+export async function mockConfirmPaymentApi(data: { id: number }) {
+  return requestClient.post<{ success?: boolean }>(
+    '/api/v1/payment/callback/mock-confirm',
     data,
   );
 }

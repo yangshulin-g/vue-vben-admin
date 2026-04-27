@@ -1,11 +1,8 @@
 import { requestClient } from '#/api/request';
 
-export type OrderStatus =
-  | 'CANCELLED'
-  | 'COMPLETED'
-  | 'PENDING_PAYMENT'
-  | 'PENDING_SHIPMENT'
-  | 'SHIPPED';
+export type OrderStatus = 'CANCELLED' | 'COMPLETED' | 'CREATED' | 'SHIPPED';
+
+export type OrderPaymentStatus = 'FULLY_PAID' | 'PARTIALLY_PAID' | 'UNPAID';
 
 /** 与后端 OrderSourceEnum 一致 */
 export type OrderSource = 'ADMIN_PROXY' | 'CUSTOMER_CART';
@@ -14,6 +11,7 @@ export interface OrderListReq {
   customerName?: string;
   orderNo?: string;
   page: number;
+  paymentStatus?: string;
   size: number;
   status?: string;
 }
@@ -32,6 +30,7 @@ export interface OrderListItem {
   /** 未迁移的旧数据可能为空 */
   orderSource?: OrderSource;
   orderNo: string;
+  paymentStatus?: OrderPaymentStatus;
   status: OrderStatus;
   totalAmount: number;
 }
@@ -69,6 +68,7 @@ export interface OrderDetailRes {
   items?: OrderDetailItem[];
   orderNo?: string;
   orderSource?: OrderSource;
+  paymentStatus?: OrderPaymentStatus;
   status?: OrderStatus;
   totalAmount?: number;
 }
@@ -101,6 +101,8 @@ export async function cancelOrderApi(orderId: number) {
 }
 
 export async function confirmShipmentApi(data: {
+  forceShip?: boolean;
+  forceShipReason?: string;
   orderId: number;
   shippingCompany?: string;
   shippingNo?: string;

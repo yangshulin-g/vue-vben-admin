@@ -1,5 +1,9 @@
 <script lang="ts" setup>
-import type { CustomerDetailRes, CustomerItem } from '#/api';
+import type {
+  CustomerAccountDetailRes,
+  CustomerDetailRes,
+  CustomerItem,
+} from '#/api';
 
 import { reactive, ref } from 'vue';
 
@@ -23,10 +27,14 @@ import {
 } from 'ant-design-vue';
 
 import {
+  createCustomerAccountApi,
   createCustomerApi,
   deleteCustomerApi,
+  getCustomerAccountDetailApi,
   getCustomerDetailApi,
   getCustomerListApi,
+  resetCustomerAccountPasswordApi,
+  updateCustomerAccountStatusApi,
   updateCustomerApi,
 } from '#/api';
 
@@ -43,6 +51,8 @@ const editOpen = ref(false);
 const detailOpen = ref(false);
 const detailLoading = ref(false);
 const detailData = ref<CustomerDetailRes | null>(null);
+const accountLoading = ref(false);
+const accountData = ref<CustomerAccountDetailRes | null>(null);
 
 const filters = reactive({
   status: undefined as number | undefined,
@@ -84,6 +94,14 @@ const canCreate = () => accessStore.accessCodes.includes('customer:create');
 const canUpdate = () => accessStore.accessCodes.includes('customer:update');
 const canDelete = () => accessStore.accessCodes.includes('customer:delete');
 const canDetail = () => accessStore.accessCodes.includes('customer:detail');
+const canAccountCreate = () =>
+  accessStore.accessCodes.includes('customer:account:create');
+const canAccountDetail = () =>
+  accessStore.accessCodes.includes('customer:account:detail');
+const canAccountStatusUpdate = () =>
+  accessStore.accessCodes.includes('customer:account:status:update');
+const canAccountPasswordReset = () =>
+  accessStore.accessCodes.includes('customer:account:password:reset');
 
 function customerTypeText(value?: number) {
   if (value === 1) return '批发商';
@@ -103,13 +121,10 @@ async function loadData() {
     const res = await getCustomerListApi({
       page: pagination.current,
       size: pagination.pageSize,
+      status: filters.status,
     });
-    let records = res.list ?? [];
-    if (filters.status !== undefined) {
-      records = records.filter((item) => item.status === filters.status);
-    }
-    dataSource.value = records;
-    total.value = res.total ?? records.length;
+    dataSource.value = res.list ?? [];
+    total.value = res.total ?? 0;
   } finally {
     loading.value = false;
   }
@@ -202,10 +217,86 @@ async function removeCustomer(item: CustomerItem) {
 async function openDetail(item: CustomerItem) {
   detailOpen.value = true;
   detailLoading.value = true;
+  accountData.value = null;
   try {
     detailData.value = await getCustomerDetailApi({ id: item.customerId });
+    if (canAccountDetail()) {
+      await loadAccountDetail(item.customerId);
+    }
   } finally {
     detailLoading.value = false;
+  }
+}
+
+async function loadAccountDetail(customerId: number) {
+  accountLoading.value = true;
+  try {
+    accountData.value = await getCustomerAccountDetailApi({ customerId });
+  } finally {
+    accountLoading.value = false;
+  }
+}
+
+function showPasswordResult(
+  title: string,
+  password?: string,
+  username?: string,
+) {
+  Modal.success({
+    content: `${username ? `用户名：${username}\n` : ''}密码：${password || '-'}\n仅当前可见，请及时通知客户。`,
+    title,
+  });
+}
+
+async function createAccount() {
+  if (!detailData.value) return;
+  accountLoading.value = true;
+  try {
+    const res = await createCustomerAccountApi({
+      customerId: detailData.value.id,
+    });
+    message.success('客户账号开通成功');
+    showPasswordResult('客户账号已开通', res.initialPassword, res.username);
+    await loadAccountDetail(detailData.value.id);
+  } catch {
+    // 全局拦截器已展示具体错误信息
+  } finally {
+    accountLoading.value = false;
+  }
+}
+
+async function toggleAccountStatus() {
+  if (!detailData.value || !accountData.value?.opened) return;
+  const nextStatus = accountData.value.status === 1 ? 0 : 1;
+  accountLoading.value = true;
+  try {
+    await updateCustomerAccountStatusApi({
+      customerId: detailData.value.id,
+      status: nextStatus,
+    });
+    message.success(nextStatus === 1 ? '客户账号已启用' : '客户账号已禁用');
+    await loadAccountDetail(detailData.value.id);
+  } catch {
+    // 全局拦截器已展示具体错误信息
+  } finally {
+    accountLoading.value = false;
+  }
+}
+
+async function resetAccountPassword() {
+  if (!detailData.value || !accountData.value?.opened) return;
+  accountLoading.value = true;
+  try {
+    const res = await resetCustomerAccountPasswordApi({
+      customerId: detailData.value.id,
+    });
+    message.success('客户账号密码已重置');
+    showPasswordResult('客户账号密码已重置', res.newPassword, res.username);
+    await loadAccountDetail(detailData.value.id);
+  } catch {
+    // 全局拦截器已展示具体错误信息
+  } finally {
+    accountLoading.value = false;
   }
 }
 
@@ -451,6 +542,66 @@ loadData();
           {{ detailData.remark || '-' }}
         </Descriptions.Item>
       </Descriptions>
+      <Card class="mt-4" size="small" title="账号面板">
+        <template #extra>
+          <Space>
+            <Button
+              v-if="canAccountCreate() && !accountData?.opened"
+              :loading="accountLoading"
+              size="small"
+              type="primary"
+              @click="createAccount"
+            >
+              开通账号
+            </Button>
+            <Button
+              v-if="canAccountStatusUpdate() && accountData?.opened"
+              :loading="accountLoading"
+              size="small"
+              @click="toggleAccountStatus"
+            >
+              {{ accountData?.status === 1 ? '禁用账号' : '启用账号' }}
+            </Button>
+            <Button
+              v-if="canAccountPasswordReset() && accountData?.opened"
+              :loading="accountLoading"
+              size="small"
+              @click="resetAccountPassword"
+            >
+              重置密码
+            </Button>
+          </Space>
+        </template>
+        <div v-if="accountLoading">账号信息加载中...</div>
+        <Descriptions v-else :column="2" bordered size="small">
+          <Descriptions.Item label="开通状态">
+            <Tag :color="accountData?.opened ? 'success' : 'default'">
+              {{ accountData?.opened ? '已开通' : '未开通' }}
+            </Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label="账号状态">
+            <Tag
+              v-if="accountData?.opened"
+              :color="accountData?.status === 1 ? 'success' : 'default'"
+            >
+              {{ accountData?.status === 1 ? '启用' : '禁用' }}
+            </Tag>
+            <span v-else>-</span>
+          </Descriptions.Item>
+          <Descriptions.Item label="用户名">
+            {{ accountData?.username || '-' }}
+          </Descriptions.Item>
+          <Descriptions.Item label="手机号">
+            {{ accountData?.phone || detailData?.contactPhone || '-' }}
+          </Descriptions.Item>
+          <Descriptions.Item label="默认登录标识">
+            {{ accountData?.username || detailData?.contactPhone || '-' }}
+          </Descriptions.Item>
+          <Descriptions.Item label="开通时间">
+            {{ accountData?.createdAt || '-' }}
+          </Descriptions.Item>
+        </Descriptions>
+      </Card>
     </Modal>
   </Page>
 </template>
