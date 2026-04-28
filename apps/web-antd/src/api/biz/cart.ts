@@ -9,6 +9,7 @@ export interface CartListReq {
 export interface CartItem {
   cartId?: number;
   customerId?: number;
+  id?: number;
   price?: number;
   productCode?: string;
   productName?: string;
@@ -16,6 +17,7 @@ export interface CartItem {
   skuCode?: string;
   skuSpecification?: string;
   stock?: number;
+  subtotal?: number;
   totalAmount?: number;
 }
 
@@ -26,6 +28,18 @@ export interface CartListRes {
 
 export async function getShoppingCartListApi(data: CartListReq) {
   return requestClient.post<CartListRes>('/api/v1/shopping-cart/list', data);
+}
+
+export async function addToCartApi(data: {
+  customerId: number;
+  productCode: string;
+  quantity: number;
+  skuCode: string;
+}) {
+  return requestClient.post<{ cartId?: number }>(
+    '/api/v1/shopping-cart/add',
+    data,
+  );
 }
 
 export async function updateCartQuantityApi(data: {

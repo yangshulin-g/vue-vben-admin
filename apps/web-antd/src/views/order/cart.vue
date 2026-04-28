@@ -11,6 +11,7 @@ import {
   Button,
   Card,
   Form,
+  Input,
   InputNumber,
   message,
   Modal,
@@ -20,6 +21,7 @@ import {
 } from 'ant-design-vue';
 
 import {
+  addToCartApi,
   getShoppingCartListApi,
   removeFromCartApi,
   updateCartQuantityApi,
@@ -32,6 +34,7 @@ const dataSource = ref<CartItem[]>([]);
 const total = ref(0);
 const actionLoading = ref(false);
 const editOpen = ref(false);
+const addOpen = ref(false);
 const accessStore = useAccessStore();
 
 const form = reactive({
@@ -41,15 +44,22 @@ const form = reactive({
 });
 
 const columns = [
-  { dataIndex: 'cartId', key: 'cartId', title: '购物车ID' },
+  { dataIndex: 'id', key: 'id', title: '购物车ID' },
   { dataIndex: 'productCode', key: 'productCode', title: '商品编码' },
   { dataIndex: 'productName', key: 'productName', title: '商品名称' },
   { dataIndex: 'skuCode', key: 'skuCode', title: 'SKU' },
   { dataIndex: 'quantity', key: 'quantity', title: '数量' },
   { dataIndex: 'price', key: 'price', title: '单价' },
-  { dataIndex: 'totalAmount', key: 'totalAmount', title: '小计' },
+  { dataIndex: 'subtotal', key: 'subtotal', title: '小计' },
   { key: 'actions', title: '操作', width: 180 },
 ];
+
+const addForm = reactive({
+  customerId: undefined as number | undefined,
+  productCode: '',
+  quantity: 1,
+  skuCode: '',
+});
 
 const editForm = reactive({
   cartId: undefined as number | undefined,
@@ -84,12 +94,51 @@ function canUpdate() {
   return accessStore.accessCodes.includes('cart:update');
 }
 
+function canAdd() {
+  return accessStore.accessCodes.includes('cart:add');
+}
+
 function canRemove() {
   return accessStore.accessCodes.includes('cart:remove');
 }
 
+function openAdd() {
+  addForm.customerId = form.customerId;
+  addForm.productCode = '';
+  addForm.skuCode = '';
+  addForm.quantity = 1;
+  addOpen.value = true;
+}
+
+async function submitAdd() {
+  if (
+    !addForm.customerId ||
+    !addForm.productCode ||
+    !addForm.skuCode ||
+    !addForm.quantity
+  ) {
+    message.warning('请填写客户ID、商品编码、SKU编码和数量');
+    return;
+  }
+  actionLoading.value = true;
+  try {
+    await addToCartApi({
+      customerId: addForm.customerId,
+      productCode: addForm.productCode,
+      quantity: addForm.quantity,
+      skuCode: addForm.skuCode,
+    });
+    message.success('添加购物车成功');
+    addOpen.value = false;
+    form.customerId = addForm.customerId;
+    await loadData();
+  } finally {
+    actionLoading.value = false;
+  }
+}
+
 function openEdit(item: CartItem) {
-  editForm.cartId = item.cartId;
+  editForm.cartId = item.cartId ?? item.id;
   editForm.quantity = item.quantity || 1;
   editOpen.value = true;
 }
@@ -111,8 +160,9 @@ async function submitEdit() {
 }
 
 async function removeItem(item: CartItem) {
-  if (!item.cartId) return;
-  await removeFromCartApi({ cartId: item.cartId });
+  const cartId = item.cartId ?? item.id;
+  if (!cartId) return;
+  await removeFromCartApi({ cartId });
   message.success('移除成功');
   await loadData();
 }
@@ -139,6 +189,7 @@ async function removeItem(item: CartItem) {
         <Form.Item>
           <Space>
             <Button type="primary" @click="loadData">查询</Button>
+            <Button v-if="canAdd()" @click="openAdd">添加购物车</Button>
             <Button @click="onReset">重置</Button>
           </Space>
         </Form.Item>
@@ -151,7 +202,7 @@ async function removeItem(item: CartItem) {
         :data-source="dataSource"
         :loading="loading"
         :pagination="false"
-        row-key="cartId"
+        row-key="id"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'actions'">
@@ -176,6 +227,43 @@ async function removeItem(item: CartItem) {
         </template>
       </Table>
     </Card>
+
+    <Modal
+      v-model:open="addOpen"
+      :confirm-loading="actionLoading"
+      title="添加购物车"
+      @ok="submitAdd"
+    >
+      <Form layout="vertical">
+        <Form.Item label="客户ID" required>
+          <InputNumber
+            v-model:value="addForm.customerId"
+            :min="1"
+            placeholder="请输入客户ID"
+            style="width: 100%"
+          />
+        </Form.Item>
+        <Form.Item label="商品编码" required>
+          <Input
+            v-model:value="addForm.productCode"
+            placeholder="请输入商品编码，例如 P1001"
+          />
+        </Form.Item>
+        <Form.Item label="SKU编码" required>
+          <Input
+            v-model:value="addForm.skuCode"
+            placeholder="请输入SKU编码，例如 SKU1001"
+          />
+        </Form.Item>
+        <Form.Item label="数量" required>
+          <InputNumber
+            v-model:value="addForm.quantity"
+            :min="1"
+            style="width: 100%"
+          />
+        </Form.Item>
+      </Form>
+    </Modal>
 
     <Modal
       v-model:open="editOpen"
