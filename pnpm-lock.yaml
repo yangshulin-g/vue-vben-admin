@@ -846,6 +846,34 @@ importers:
         specifier: 'catalog:'
         version: 0.11.2(magicast@0.5.2)
 
+  apps/web-h5:
+    dependencies:
+      axios:
+        specifier: 'catalog:'
+        version: 1.15.0
+      vue:
+        specifier: ^3.5.32
+        version: 3.5.32(typescript@6.0.2)
+      vue-router:
+        specifier: 'catalog:'
+        version: 5.0.4(@vue/compiler-sfc@3.5.32)(pinia@3.0.4(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2)))(vue@3.5.32(typescript@6.0.2))
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.0
+      '@vitejs/plugin-vue':
+        specifier: 'catalog:'
+        version: 6.0.6(vite@8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(less@4.6.4)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.1)(yaml@2.8.3))(vue@3.5.32(typescript@6.0.2))
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.2
+      vite:
+        specifier: 'catalog:'
+        version: 8.0.8(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(less@4.6.4)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.1)(yaml@2.8.3)
+      vue-tsc:
+        specifier: 'catalog:'
+        version: 3.2.6(typescript@6.0.2)
+
   apps/web-naive:
     dependencies:
       '@vben-core/shadcn-ui':
