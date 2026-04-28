@@ -1,7 +1,7 @@
 import { initPreferences } from '@vben/preferences';
 import { unmountGlobalLoading } from '@vben/utils';
 
-import { overridesPreferences } from './preferences';
+import { overridesPreferences, preferencesExtension } from './preferences';
 
 import './bizport-overrides.css';
 
@@ -17,6 +17,7 @@ async function initApplication() {
 
   // app偏好设置初始化
   await initPreferences({
+    extension: preferencesExtension,
     namespace,
     overrides: overridesPreferences,
   });

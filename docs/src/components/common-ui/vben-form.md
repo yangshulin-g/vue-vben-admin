@@ -35,10 +35,15 @@ import type { ComponentType } from './component';
 import { setupVbenForm, useVbenForm as useForm, z } from '@vben/common-ui';
 import { $t } from '@vben/locales';
 
+import { initComponentAdapter } from './component';
+
+initComponentAdapter();
 setupVbenForm<ComponentType>({
   config: {
     // ant design vue组件库默认都是 v-model:value
     baseModelPropName: 'value',
+    // 一些组件库空值为 null，重置表单时需要和实际组件行为保持一致
+    emptyStateValue: null,
     // 一些组件是 v-model:checked 或者 v-model:fileList
     modelPropNameMap: {
       Checkbox: 'checked',
@@ -87,55 +92,32 @@ import type { BaseFormComponentType } from '@vben/common-ui';
 import type { Component, SetupContext } from 'vue';
 import { h } from 'vue';
 
-import { globalShareState, IconPicker } from '@vben/common-ui';
+import { globalShareState } from '@vben/common-ui';
 import { $t } from '@vben/locales';
-
-const AutoComplete = defineAsyncComponent(
-  () => import('ant-design-vue/es/auto-complete'),
-);
-const Button = defineAsyncComponent(() => import('ant-design-vue/es/button'));
-const Checkbox = defineAsyncComponent(
-  () => import('ant-design-vue/es/checkbox'),
-);
-const CheckboxGroup = defineAsyncComponent(() =>
-  import('ant-design-vue/es/checkbox').then((res) => res.CheckboxGroup),
-);
-const DatePicker = defineAsyncComponent(
-  () => import('ant-design-vue/es/date-picker'),
-);
-const Divider = defineAsyncComponent(() => import('ant-design-vue/es/divider'));
-const Input = defineAsyncComponent(() => import('ant-design-vue/es/input'));
-const InputNumber = defineAsyncComponent(
-  () => import('ant-design-vue/es/input-number'),
-);
-const InputPassword = defineAsyncComponent(() =>
-  import('ant-design-vue/es/input').then((res) => res.InputPassword),
-);
-const Mentions = defineAsyncComponent(
-  () => import('ant-design-vue/es/mentions'),
-);
-const Radio = defineAsyncComponent(() => import('ant-design-vue/es/radio'));
-const RadioGroup = defineAsyncComponent(() =>
-  import('ant-design-vue/es/radio').then((res) => res.RadioGroup),
-);
-const RangePicker = defineAsyncComponent(() =>
-  import('ant-design-vue/es/date-picker').then((res) => res.RangePicker),
-);
-const Rate = defineAsyncComponent(() => import('ant-design-vue/es/rate'));
-const Select = defineAsyncComponent(() => import('ant-design-vue/es/select'));
-const Space = defineAsyncComponent(() => import('ant-design-vue/es/space'));
-const Switch = defineAsyncComponent(() => import('ant-design-vue/es/switch'));
-const Textarea = defineAsyncComponent(() =>
-  import('ant-design-vue/es/input').then((res) => res.Textarea),
-);
-const TimePicker = defineAsyncComponent(
-  () => import('ant-design-vue/es/time-picker'),
-);
-const TreeSelect = defineAsyncComponent(
-  () => import('ant-design-vue/es/tree-select'),
-);
-const Upload = defineAsyncComponent(() => import('ant-design-vue/es/upload'));
-
+import {
+  AutoComplete,
+  Button,
+  Checkbox,
+  CheckboxGroup,
+  DatePicker,
+  Divider,
+  Input,
+  InputNumber,
+  InputPassword,
+  Mentions,
+  notification,
+  Radio,
+  RadioGroup,
+  RangePicker,
+  Rate,
+  Select,
+  Space,
+  Switch,
+  Textarea,
+  TimePicker,
+  TreeSelect,
+  Upload,
+} from 'ant-design-vue';
 
 const withDefaultPlaceholder = <T extends Component>(
   component: T,
@@ -171,7 +153,6 @@ export type ComponentType =
   | 'TimePicker'
   | 'TreeSelect'
   | 'Upload'
-  | 'IconPicker';
   | BaseFormComponentType;
 
 async function initComponentAdapter() {
@@ -189,7 +170,6 @@ async function initComponentAdapter() {
       return h(Button, { ...props, attrs, type: 'default' }, slots);
     },
     Divider,
-    IconPicker,
     Input: withDefaultPlaceholder(Input, 'input'),
     InputNumber: withDefaultPlaceholder(InputNumber, 'input'),
     InputPassword: withDefaultPlaceholder(InputPassword, 'input'),
@@ -249,6 +229,16 @@ export { initComponentAdapter };
 查询表单是一种特殊的表单，用于查询数据。查询表单不会触发表单验证，只会触发查询事件。
 
 <DemoPreview dir="demos/vben-form/query" />
+
+## 值格式化
+
+当组件的展示值与后端真正需要的 payload 不一致时，可以在 schema 上使用 `valueFormat`。它会在 `getValues()`、提交、以及依赖这些输出的方法中生效。
+
+- `return xxx`：回写当前字段
+- `setValue('startTime', xxx)`：写入其他字段
+- `return undefined`：保持当前字段已被移除，适合把一个字段拆成多个字段
+
+<DemoPreview dir="demos/vben-form/value-format" />
 
 ## 表单校验
 
@@ -335,6 +325,7 @@ useVbenForm 返回的第二个参数，是一个对象，包含了一些表单�
 | handleReset | 表单重置回调 | `(values: Record<string, any>,) => Promise<void> \| void` | - |
 | handleSubmit | 表单提交回调 | `(values: Record<string, any>,) => Promise<void> \| void` | - |
 | handleValuesChange | 表单值变化回调 | `(values: Record<string, any>, fieldsChanged: string[]) => void` | - |
+| handleCollapsedChange | 表单收起展开状态变化回调 | `(collapsed: boolean) => void` | - |
 | actionButtonsReverse | 调换操作按钮位置 | `boolean` | `false` |
 | resetButtonOptions | 重置按钮组件参数 | `ActionButtonOptions` | - |
 | submitButtonOptions | 提交按钮组件参数 | `ActionButtonOptions` | - |
@@ -359,6 +350,32 @@ useVbenForm 返回的第二个参数，是一个对象，包含了一些表单�
 ::: tip fieldMappingTime
 
 此属性用于将表单内的数组值映射成 2 个字段，它应当传入一个数组，数组的每一项是一个映射规则，规则的第一个成员是一个字符串，表示需要映射的字段名，第二个成员是一个数组，表示映射后的字段名，第三个成员是一个可选的格式掩码，用于格式化日期时间字段；也可以提供一个格式化函数（参数分别为当前值和当前字段名，返回格式化后的值）。如果明确地将格式掩码设为null，则原值映射而不进行格式化（适用于非日期时间字段）。例如：`[['timeRange', ['startTime', 'endTime'], 'YYYY-MM-DD']]`，`timeRange`应当是一个至少具有2个成员的数组类型的值。Form会将`timeRange`的值前两个值分别按照格式掩码`YYYY-MM-DD`格式化后映射到`startTime`和`endTime`字段上。每一项的第三个参数是一个可选的格式掩码，
+
+:::
+
+::: tip valueFormat
+
+`valueFormat` 适合处理“组件值”和“提交值”不一致的场景。例如：
+
+- `RangePicker` 返回 `[dayjs, dayjs]`，但后端需要 `{ startTime, endTime }`
+- `DatePicker` 返回 `dayjs`，但后端只需要时间戳
+
+`valueFormat` 会在 `getValues()` 过程中执行：
+
+- 返回 `undefined`：当前字段保持删除状态
+- 返回其他值：回写当前字段
+- 调用 `setValue(key, nextValue)`：写入一个或多个新字段
+
+```ts
+{
+  component: 'RangePicker',
+  fieldName: 'reportRange',
+  valueFormat(value, setValue) {
+    setValue('startTime', value?.[0]?.valueOf());
+    setValue('endTime', value?.[1]?.valueOf());
+  },
+}
+```
 
 :::
 
@@ -483,8 +500,26 @@ export interface FormSchema<
   rules?: FormSchemaRuleType;
   /** 后缀 */
   suffix?: CustomRenderType;
+  /** 获取 getValues() 输出时格式化当前字段 */
+  valueFormat?: FormValueFormat;
 }
 ```
+
+:::
+
+::: details FormValueFormat
+
+```ts
+type FormValueFormat = (
+  value: any,
+  setValue: (fieldName: string, value: any) => void,
+  values: Record<string, any>,
+) => any;
+```
+
+- 返回 `undefined`：保持当前字段已被移除
+- 返回其他值：将当前字段恢复/写回为该值
+- `setValue(fieldName, value)`：用于把一个字段拆分写入其他字段
 
 :::
 

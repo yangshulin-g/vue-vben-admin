@@ -20,6 +20,7 @@ const defaultPreferences: Preferences = {
     defaultHomePath: '/analytics',
     dynamicTitle: true,
     enableCheckUpdates: true,
+    enableCopyPreferences: true,
     enablePreferences: true,
     enableRefreshToken: false,
     enableStickyPreferencesNavigationBar: true,
@@ -85,6 +86,7 @@ const defaultPreferences: Preferences = {
     collapsedButton: true,
     collapsedShowTitle: false,
     collapseWidth: 60,
+    draggable: true,
     enable: true,
     expandOnHover: true,
     extraCollapse: false,
@@ -105,7 +107,9 @@ const defaultPreferences: Preferences = {
     showIcon: true,
     showMaximize: true,
     showMore: true,
+    showRefresh: true,
     styleType: 'chrome',
+    visitHistory: true,
     wheelable: true,
   },
   theme: {
@@ -116,8 +120,10 @@ const defaultPreferences: Preferences = {
     colorWarning: 'hsl(42 84% 61%)',
     mode: 'dark',
     radius: '0.5',
+    fontSize: 16,
     semiDarkHeader: false,
     semiDarkSidebar: false,
+    semiDarkSidebarSub: false,
   },
   transition: {
     enable: true,
@@ -134,6 +140,7 @@ const defaultPreferences: Preferences = {
     refresh: true,
     sidebarToggle: true,
     themeToggle: true,
+    timezone: true,
   },
 };
 

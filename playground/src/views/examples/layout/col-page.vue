@@ -42,11 +42,7 @@ const leftMaxWidth = ref(props.leftMaxWidth || 100);
     <template #left="{ isCollapsed, expand }">
       <div v-if="isCollapsed" @click="expand">
         <Tooltip title="点击展开左侧">
-          <Button
-            shape="circle"
-            type="primary"
-            class="flex items-center justify-center"
-          >
+          <Button shape="circle" type="primary" class="flex-center">
             <template #icon>
               <IconifyIcon class="text-2xl" icon="bi:arrow-right" />
             </template>
@@ -56,7 +52,7 @@ const leftMaxWidth = ref(props.leftMaxWidth || 100);
       <div
         v-else
         :style="{ minWidth: '200px' }"
-        class="border-border bg-card mr-2 rounded-[var(--radius)] border p-2"
+        class="mr-2 rounded-(--radius) border border-border bg-card p-2"
       >
         <p>这里是左侧内容</p>
         <p>这里是左侧内容</p>
@@ -68,12 +64,10 @@ const leftMaxWidth = ref(props.leftMaxWidth || 100);
     <Card class="ml-2" title="基本使用">
       <div class="flex flex-col gap-2">
         <div class="flex gap-2">
-          <Checkbox v-model:checked="props.resizable">可拖动调整宽度</Checkbox>
-          <Checkbox v-model:checked="props.splitLine">显示拖动分隔线</Checkbox>
-          <Checkbox v-model:checked="props.splitHandle">显示拖动手柄</Checkbox>
-          <Checkbox v-model:checked="props.leftCollapsible">
-            左侧可折叠
-          </Checkbox>
+          <Checkbox v-model="props.resizable">可拖动调整宽度</Checkbox>
+          <Checkbox v-model="props.splitLine">显示拖动分隔线</Checkbox>
+          <Checkbox v-model="props.splitHandle">显示拖动手柄</Checkbox>
+          <Checkbox v-model="props.leftCollapsible"> 左侧可折叠 </Checkbox>
         </div>
         <div class="flex items-center gap-2">
           <span>左侧最小宽度百分比：</span>
@@ -81,7 +75,7 @@ const leftMaxWidth = ref(props.leftMaxWidth || 100);
             v-model:value="leftMinWidth"
             :max="props.leftMaxWidth - 1"
             :min="1"
-            style="width: 100px"
+            class="w-25"
             @after-change="(value) => (props.leftMinWidth = value as number)"
           />
           <span>左侧最大宽度百分比：</span>
@@ -89,7 +83,7 @@ const leftMaxWidth = ref(props.leftMaxWidth || 100);
             v-model:value="props.leftMaxWidth"
             :max="100"
             :min="leftMaxWidth + 1"
-            style="width: 100px"
+            class="w-25"
             @after-change="(value) => (props.leftMaxWidth = value as number)"
           />
         </div>
