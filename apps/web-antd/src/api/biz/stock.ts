@@ -36,6 +36,10 @@ export interface StockAlertItem {
   stock?: number;
 }
 
+export interface StockConfigRes {
+  allowOversell?: boolean;
+}
+
 export async function stockAdjustApi(data: StockAdjustReq) {
   return requestClient.post<{ success?: boolean }>(
     '/api/v1/stock/adjust',
@@ -60,6 +64,17 @@ export async function updateStockAlertThresholdApi(data: {
 }) {
   return requestClient.post<{ success?: boolean }>(
     '/api/v1/stock/alert/threshold/update',
+    data,
+  );
+}
+
+export async function getStockConfigApi() {
+  return requestClient.post<StockConfigRes>('/api/v1/stock-config/detail', {});
+}
+
+export async function updateStockConfigApi(data: { allowOversell: boolean }) {
+  return requestClient.post<StockConfigRes>(
+    '/api/v1/stock-config/update',
     data,
   );
 }

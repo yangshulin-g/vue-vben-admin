@@ -2,6 +2,7 @@
 import type {
   ProductDetailRes,
   ProductImageItem,
+  ProductImportRes,
   ProductListItem,
 } from '#/api';
 
@@ -25,19 +26,24 @@ import {
   Table,
   Tabs,
   Tag,
+  Upload,
 } from 'ant-design-vue';
 
 import {
   addProductImageApi,
+  confirmProductImportApi,
   createProductApi,
+  exportProductApi,
   getCategoryListApi,
   getProductDetailApi,
+  getProductImportTemplateApi,
   getProductListApi,
   removeProductImageApi,
   setMainProductImageApi,
   sortProductImageApi,
   updateProductApi,
   updateProductStatusApi,
+  validateProductImportApi,
 } from '#/api';
 import BizImageUpload from '#/components/biz-upload/BizImageUpload.vue';
 
@@ -49,6 +55,11 @@ const detailLoading = ref(false);
 const createLoading = ref(false);
 const editLoading = ref(false);
 const imageActionLoading = ref(false);
+const importOpen = ref(false);
+const importLoading = ref(false);
+const exportLoading = ref(false);
+const templateLoading = ref(false);
+const importResult = ref<null | ProductImportRes>(null);
 const dataSource = ref<ProductListItem[]>([]);
 const total = ref(0);
 const categoryOptions = ref<Array<{ label: string; value: number }>>([]);
@@ -137,6 +148,13 @@ const canSortImage = () =>
   accessStore.accessCodes.includes('product:image:sort');
 const canSetMainImage = () =>
   accessStore.accessCodes.includes('product:image:main');
+const canImportTemplate = () =>
+  accessStore.accessCodes.includes('product:import:template');
+const canImportValidate = () =>
+  accessStore.accessCodes.includes('product:import:validate');
+const canImportConfirm = () =>
+  accessStore.accessCodes.includes('product:import:confirm');
+const canExport = () => accessStore.accessCodes.includes('product:export');
 
 const skuColumns = [
   { dataIndex: 'skuCode', key: 'skuCode', title: 'SKU编码' },
@@ -169,6 +187,33 @@ const columns = [
   { key: 'stockTotal', title: '总库存' },
   { key: 'actions', title: '操作', width: 240 },
 ];
+
+function downloadFileContent(file?: {
+  contentBase64?: string;
+  contentType?: string;
+  filename?: string;
+}) {
+  if (!file?.contentBase64) {
+    message.warning('文件内容为空');
+    return;
+  }
+  const binary = atob(file.contentBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.codePointAt(i) ?? 0;
+  }
+  const blob = new Blob([bytes], {
+    type:
+      file.contentType ||
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.filename || 'download.xlsx';
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 function formatSkuPriceRange(item: ProductListItem) {
   const prices = (item.skuList ?? [])
@@ -463,7 +508,7 @@ function formatSpecificationView(specification: any) {
 }
 
 function normalizeImageList(images?: ProductImageItem[]) {
-  return [...(images ?? [])].sort(
+  return [...(images ?? [])].toSorted(
     (a, b) => Number(a.sort ?? 0) - Number(b.sort ?? 0),
   );
 }
@@ -562,6 +607,72 @@ async function loadProductList() {
     total.value = res.total ?? 0;
   } finally {
     loading.value = false;
+  }
+}
+
+async function downloadTemplate() {
+  templateLoading.value = true;
+  try {
+    downloadFileContent(await getProductImportTemplateApi());
+  } finally {
+    templateLoading.value = false;
+  }
+}
+
+async function exportProducts() {
+  exportLoading.value = true;
+  try {
+    downloadFileContent(
+      await exportProductApi({
+        categoryId: filters.categoryId,
+        productName: filters.productName || undefined,
+        status: filters.status,
+      }),
+    );
+    message.success('商品导出文件已生成');
+  } finally {
+    exportLoading.value = false;
+  }
+}
+
+function openImport() {
+  importResult.value = null;
+  importOpen.value = true;
+}
+
+async function handleImportValidate(options: any) {
+  importLoading.value = true;
+  try {
+    importResult.value = await validateProductImportApi(options.file as File);
+    options.onSuccess?.({});
+    if ((importResult.value.errorRows ?? 0) > 0) {
+      message.warning('导入文件校验未通过，请先处理错误行');
+    } else {
+      message.success('导入文件校验通过');
+    }
+  } catch (error: any) {
+    options.onError?.(error);
+    message.error(error?.message || '导入校验失败');
+  } finally {
+    importLoading.value = false;
+  }
+}
+
+async function confirmImport() {
+  if (!importResult.value?.taskId) {
+    message.warning('请先上传并校验导入文件');
+    return;
+  }
+  importLoading.value = true;
+  try {
+    importResult.value = await confirmProductImportApi({
+      taskId: importResult.value.taskId,
+    });
+    message.success('商品导入成功');
+    importOpen.value = false;
+    await loadProductList();
+  } finally {
+    importLoading.value = false;
   }
 }
 
@@ -757,6 +868,23 @@ loadProductList();
             <Button v-if="canCreate()" type="dashed" @click="openCreate">
               新增商品
             </Button>
+            <Button
+              v-if="canImportTemplate()"
+              :loading="templateLoading"
+              @click="downloadTemplate"
+            >
+              下载模板
+            </Button>
+            <Button v-if="canImportValidate()" @click="openImport">
+              导入商品
+            </Button>
+            <Button
+              v-if="canExport()"
+              :loading="exportLoading"
+              @click="exportProducts"
+            >
+              导出商品
+            </Button>
             <Button type="primary" @click="onSearch">查询</Button>
             <Button @click="onReset">重置</Button>
           </Space>
@@ -851,6 +979,57 @@ loadProductList();
         </template>
       </Table>
     </Card>
+
+    <Modal
+      v-model:open="importOpen"
+      :confirm-loading="importLoading"
+      :ok-button-props="{
+        disabled:
+          !importResult?.taskId ||
+          (importResult?.errorRows ?? 0) > 0 ||
+          importResult?.status === 'IMPORTED' ||
+          !canImportConfirm(),
+      }"
+      title="商品导入"
+      width="720px"
+      @ok="confirmImport"
+    >
+      <Space direction="vertical" style="width: 100%">
+        <Upload
+          :custom-request="handleImportValidate"
+          :show-upload-list="false"
+          accept=".xlsx"
+        >
+          <Button :loading="importLoading">选择 Excel 并校验</Button>
+        </Upload>
+        <Descriptions v-if="importResult" bordered :column="2" size="small">
+          <Descriptions.Item label="任务号">
+            {{ importResult.taskNo || '-' }}
+          </Descriptions.Item>
+          <Descriptions.Item label="状态">
+            {{ importResult.status || '-' }}
+          </Descriptions.Item>
+          <Descriptions.Item label="总行数">
+            {{ importResult.totalRows ?? 0 }}
+          </Descriptions.Item>
+          <Descriptions.Item label="错误行">
+            {{ importResult.errorRows ?? 0 }}
+          </Descriptions.Item>
+        </Descriptions>
+        <Table
+          v-if="(importResult?.errors?.length ?? 0) > 0"
+          :columns="[
+            { dataIndex: 'rowNo', key: 'rowNo', title: '行号' },
+            { dataIndex: 'fieldName', key: 'fieldName', title: '字段' },
+            { dataIndex: 'errorMessage', key: 'errorMessage', title: '错误' },
+          ]"
+          :data-source="importResult?.errors || []"
+          :pagination="false"
+          row-key="rowNo"
+          size="small"
+        />
+      </Space>
+    </Modal>
 
     <Modal
       v-model:open="createOpen"
@@ -1268,7 +1447,7 @@ loadProductList();
           <div
             class="mb-2 flex items-center justify-between text-xs text-gray-500"
           >
-            <span>ID: {{ image.imageId }}</span>
+            <span>图片编号: {{ image.imageId }}</span>
             <Tag :color="image.isMain ? 'success' : 'default'">
               {{ image.isMain ? '主图' : '普通图' }}
             </Tag>
@@ -1300,9 +1479,6 @@ loadProductList();
           />
         </div>
         <Descriptions :column="2" bordered class="mb-4" size="small">
-          <Descriptions.Item label="商品ID">
-            {{ detailData.productId }}
-          </Descriptions.Item>
           <Descriptions.Item label="商品编码">
             {{ detailData.productCode }}
           </Descriptions.Item>
@@ -1320,7 +1496,7 @@ loadProductList();
           <Descriptions.Item label="单位">
             {{ detailData.unit || '-' }}
           </Descriptions.Item>
-          <Descriptions.Item label="分类">
+          <Descriptions.Item :span="2" label="分类">
             {{ detailData.category?.categoryName || '-' }}
           </Descriptions.Item>
           <Descriptions.Item :span="2" label="描述">

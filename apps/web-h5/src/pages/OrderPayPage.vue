@@ -5,8 +5,11 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
 import {
+  applyRefund,
+  createWechatPayment,
   getOrderDetail,
   getOrderReconciliation,
+  getWechatOauthAuthorizeUrl,
   submitOfflinePayment,
   uploadVoucher,
 } from '@/lib/api';
@@ -15,6 +18,8 @@ const route = useRoute();
 const loading = ref(false);
 const uploading = ref(false);
 const submitting = ref(false);
+const wechatPaying = ref(false);
+const refunding = ref(false);
 const detail = ref<null | OrderDetailRes>(null);
 const reconciliation = ref<null | ReconciliationRes>(null);
 const paymentMethod = ref<'bank_transfer' | 'offline'>('offline');
@@ -22,6 +27,8 @@ const amount = ref(0);
 const paymentSn = ref('');
 const remark = ref('');
 const voucherUrl = ref('');
+const nativeCodeUrl = ref('');
+const refundReason = ref('');
 const errorText = ref('');
 const successText = ref('');
 
@@ -31,6 +38,22 @@ const finalAmountText = computed(() =>
 );
 const unpaidAmountText = computed(() =>
   Number(reconciliation.value?.unpaidAmount || 0).toFixed(2),
+);
+const nativeQrUrl = computed(() =>
+  nativeCodeUrl.value
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(nativeCodeUrl.value)}`
+    : '',
+);
+const paidWechatPayment = computed(() =>
+  reconciliation.value?.payments?.find(
+    (item) => item.paymentMethod === 'wechat' && item.paymentStatus === 'PAID',
+  ),
+);
+const canRefund = computed(
+  () =>
+    detail.value?.status === 'CREATED' &&
+    detail.value?.paymentStatus !== 'UNPAID' &&
+    Boolean(paidWechatPayment.value?.id),
 );
 
 async function loadOrder() {
@@ -92,6 +115,122 @@ async function submitPayment() {
   }
 }
 
+function selectWechatTradeType(): 'H5' | 'JSAPI' | 'NATIVE' {
+  const ua = window.navigator.userAgent.toLowerCase();
+  if (ua.includes('micromessenger')) {
+    return 'JSAPI';
+  }
+  if (/android|iphone|ipad|ipod|mobile/.test(ua)) {
+    return 'H5';
+  }
+  return 'NATIVE';
+}
+
+async function invokeJsapiPay(payParams: {
+  appId?: string;
+  nonceStr?: string;
+  packageValue?: string;
+  paySign?: string;
+  signType?: string;
+  timeStamp?: string;
+}) {
+  const bridge = (window as any).WeixinJSBridge;
+  if (!bridge) {
+    const auth = await getWechatOauthAuthorizeUrl(window.location.href);
+    if (auth.authorizeUrl) {
+      window.location.href = auth.authorizeUrl;
+      return;
+    }
+    throw new Error('当前微信环境不可用');
+  }
+  bridge.invoke(
+    'getBrandWCPayRequest',
+    {
+      appId: payParams.appId,
+      nonceStr: payParams.nonceStr,
+      package: payParams.packageValue,
+      paySign: payParams.paySign,
+      signType: payParams.signType,
+      timeStamp: payParams.timeStamp,
+    },
+    async () => {
+      await loadOrder();
+    },
+  );
+}
+
+async function startWechatPayment() {
+  const payAmount = Number(reconciliation.value?.unpaidAmount || 0);
+  if (payAmount <= 0) {
+    errorText.value = '当前订单无需继续支付';
+    return;
+  }
+  wechatPaying.value = true;
+  errorText.value = '';
+  successText.value = '';
+  nativeCodeUrl.value = '';
+  try {
+    const tradeType = selectWechatTradeType();
+    if (tradeType === 'JSAPI' && route.query.wechatOAuth !== '1') {
+      const returnUrl = new URL(window.location.href);
+      returnUrl.searchParams.set('wechatOAuth', '1');
+      const auth = await getWechatOauthAuthorizeUrl(returnUrl.toString());
+      if (auth.authorizeUrl) {
+        window.location.href = auth.authorizeUrl;
+        return;
+      }
+    }
+    const result = await createWechatPayment(
+      orderId.value,
+      payAmount,
+      tradeType,
+    );
+    if (result.tradeType === 'H5' && result.h5Url) {
+      window.location.href = result.h5Url;
+      return;
+    }
+    if (result.tradeType === 'JSAPI') {
+      await invokeJsapiPay(result);
+      return;
+    }
+    if (result.tradeType === 'NATIVE' && result.codeUrl) {
+      nativeCodeUrl.value = result.codeUrl;
+      successText.value = '请使用微信扫码完成支付，支付后刷新订单状态';
+      return;
+    }
+    successText.value = '微信预支付已创建';
+  } catch (error) {
+    errorText.value = error instanceof Error ? error.message : '微信支付失败';
+  } finally {
+    wechatPaying.value = false;
+  }
+}
+
+async function submitRefund() {
+  const paymentId = paidWechatPayment.value?.id;
+  if (!paymentId) {
+    errorText.value = '没有可退款的微信支付记录';
+    return;
+  }
+  refunding.value = true;
+  errorText.value = '';
+  successText.value = '';
+  try {
+    await applyRefund(
+      paymentId,
+      Number(paidWechatPayment.value?.amount || 0),
+      refundReason.value || undefined,
+    );
+    successText.value = '退款申请已提交，等待平台审核';
+    refundReason.value = '';
+    await loadOrder();
+  } catch (error) {
+    errorText.value = error instanceof Error ? error.message : '退款申请失败';
+  } finally {
+    refunding.value = false;
+  }
+}
+
 onMounted(loadOrder);
 </script>
 
@@ -129,6 +268,29 @@ onMounted(loadOrder);
             <span>未付金额</span>
             <strong>￥{{ unpaidAmountText }}</strong>
           </div>
+        </div>
+      </section>
+
+      <section class="page-card stack">
+        <div class="badge">微信支付</div>
+        <div class="meta-list">
+          <div class="meta-row">
+            <span>本次支付金额</span>
+            <strong>￥{{ unpaidAmountText }}</strong>
+          </div>
+        </div>
+        <button
+          :disabled="
+            wechatPaying || Number(reconciliation.unpaidAmount || 0) <= 0
+          "
+          class="primary-btn"
+          @click="startWechatPayment"
+        >
+          {{ wechatPaying ? '处理中...' : '微信支付' }}
+        </button>
+        <div v-if="nativeCodeUrl" class="subtle-text">
+          <img :src="nativeQrUrl" alt="微信支付二维码" class="pay-qr" />
+          <div>Native 二维码内容：{{ nativeCodeUrl }}</div>
         </div>
       </section>
 
@@ -188,6 +350,24 @@ onMounted(loadOrder);
         </button>
       </section>
 
+      <section v-if="canRefund" class="page-card stack">
+        <div class="badge">申请退款</div>
+        <div class="meta-list">
+          <div class="meta-row">
+            <span>可申请金额</span>
+            <strong>￥{{ Number(paidWechatPayment?.amount || 0).toFixed(2) }}</strong>
+          </div>
+        </div>
+        <textarea
+          v-model="refundReason"
+          class="textarea"
+          placeholder="请填写退款原因"
+        ></textarea>
+        <button :disabled="refunding" class="primary-btn" @click="submitRefund">
+          {{ refunding ? '提交中...' : '申请退款' }}
+        </button>
+      </section>
+
       <section class="page-card stack">
         <h3 class="section-title">历史支付记录</h3>
         <div v-if="!reconciliation.payments?.length" class="empty-state">
@@ -225,3 +405,13 @@ onMounted(loadOrder);
     </template>
   </div>
 </template>
+
+<style scoped>
+.pay-qr {
+  display: block;
+  width: 220px;
+  height: 220px;
+  margin: 12px auto;
+  background: #fff;
+}
+</style>

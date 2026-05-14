@@ -132,6 +132,22 @@ export interface StorageConfigDetail {
   };
 }
 
+export interface PaymentConfigDetail {
+  apiV3Key?: string;
+  appId?: string;
+  appSecret?: string;
+  enableH5?: boolean;
+  enableJsapi?: boolean;
+  enableNative?: boolean;
+  enabled?: boolean;
+  mchId?: string;
+  merchantSerialNo?: string;
+  notifyUrl?: string;
+  privateKey?: string;
+  refundNotifyUrl?: string;
+  wechatpayPublicKey?: string;
+}
+
 export async function getAdminListApi(
   data: PageReq & { status?: number; username?: string },
 ) {
@@ -395,6 +411,27 @@ export async function updateStorageConfigApi(data: StorageConfigDetail) {
 export async function testStorageConfigApi(data: StorageConfigDetail) {
   return requestClient.post<{ success?: boolean }>(
     '/api/v1/system/storage-config/test',
+    data,
+  );
+}
+
+export async function getPaymentConfigDetailApi() {
+  return requestClient.post<PaymentConfigDetail>(
+    '/api/v1/system/payment-config/detail',
+    {},
+  );
+}
+
+export async function updatePaymentConfigApi(data: PaymentConfigDetail) {
+  return requestClient.post<{ success?: boolean }>(
+    '/api/v1/system/payment-config/update',
+    data,
+  );
+}
+
+export async function testPaymentConfigApi(data: PaymentConfigDetail) {
+  return requestClient.post<{ success?: boolean }>(
+    '/api/v1/system/payment-config/test',
     data,
   );
 }

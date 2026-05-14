@@ -110,12 +110,31 @@ export interface PaymentItem {
   auditRemark?: string;
   auditStatus?: string;
   id?: number;
+  outTradeNo?: string;
   paymentMethod?: string;
+  paymentNo?: string;
   paymentSn?: string;
   paymentStatus?: string;
   paymentTime?: string;
   remark?: string;
+  tradeType?: string;
+  transactionId?: string;
   voucherUrl?: string;
+}
+
+export interface WechatPrepayRes {
+  appId?: string;
+  codeUrl?: string;
+  h5Url?: string;
+  nonceStr?: string;
+  outTradeNo?: string;
+  packageValue?: string;
+  paySign?: string;
+  paymentId?: number;
+  paymentNo?: string;
+  signType?: string;
+  timeStamp?: string;
+  tradeType?: 'H5' | 'JSAPI' | 'NATIVE';
 }
 
 export interface ReconciliationRes {
@@ -324,6 +343,40 @@ export async function submitOfflinePayment(
     paymentSn,
     remark,
     voucherUrl,
+  });
+}
+
+export async function createWechatPayment(
+  orderId: number,
+  amount: number,
+  tradeType: 'H5' | 'JSAPI' | 'NATIVE',
+) {
+  return (await http.post('/api/v1/payment/wechat/prepay', {
+    amount,
+    orderId,
+    tradeType,
+  })) as WechatPrepayRes;
+}
+
+export async function queryWechatPayment(outTradeNo: string) {
+  return http.post('/api/v1/payment/wechat/query', { outTradeNo });
+}
+
+export async function getWechatOauthAuthorizeUrl(returnUrl: string) {
+  return (await http.get('/api/v1/wechat/oauth/authorize-url', {
+    params: { returnUrl },
+  })) as { authorizeUrl?: string; state?: string };
+}
+
+export async function applyRefund(
+  paymentId: number,
+  refundAmount: number,
+  reason?: string,
+) {
+  return http.post('/api/v1/refund/apply', {
+    paymentId,
+    reason,
+    refundAmount,
   });
 }
 

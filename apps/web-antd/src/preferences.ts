@@ -20,7 +20,22 @@ export const overridesPreferences = defineOverridesPreferences({
   app: {
     accessMode: 'backend',
     defaultHomePath: '/product',
+    enableCheckUpdates: true,
+    enableCopyPreferences: true,
+    enablePreferences: true,
     name: import.meta.env.VITE_APP_TITLE,
+  },
+  copyright: {
+    companyName: 'BizPort',
+    companySiteLink: '',
+    date: '2026',
+  },
+  logo: {
+    source: '/bizport-logo.svg',
+    sourceDark: '/bizport-logo.svg',
+  },
+  widget: {
+    notification: true,
   },
 });
 

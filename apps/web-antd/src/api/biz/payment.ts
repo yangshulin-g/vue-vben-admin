@@ -13,12 +13,35 @@ export interface ReconciliationPaymentItem {
   auditBy?: number;
   auditRemark?: string;
   auditStatus?: string;
+  outTradeNo?: string;
   paymentMethod?: string;
+  paymentNo?: string;
   paymentSn?: string;
   paymentStatus?: string;
   paymentTime?: string;
   remark?: string;
+  tradeType?: string;
+  transactionId?: string;
   voucherUrl?: string;
+}
+
+export interface RefundRecordItem {
+  auditAt?: string;
+  auditBy?: number;
+  auditRemark?: string;
+  createdAt?: string;
+  customerId?: number;
+  id?: number;
+  orderId?: number;
+  paymentId?: number;
+  reason?: string;
+  refundAmount?: number;
+  refundNo?: string;
+  source?: string;
+  status?: string;
+  successTime?: string;
+  wechatRefundId?: string;
+  wechatStatus?: string;
 }
 
 export interface ReconciliationRes {
@@ -110,4 +133,36 @@ export async function mockConfirmPaymentApi(data: { id: number }) {
     '/api/v1/payment/callback/mock-confirm',
     data,
   );
+}
+
+export async function getRefundListApi(data: {
+  orderId?: number;
+  page?: number;
+  paymentId?: number;
+  size?: number;
+  status?: string;
+}) {
+  return requestClient.post<{
+    list: RefundRecordItem[];
+    total: number;
+  }>('/api/v1/refund/list', data);
+}
+
+export async function directCreateRefundApi(data: {
+  paymentId: number;
+  reason?: string;
+  refundAmount: number;
+}) {
+  return requestClient.post<RefundRecordItem>(
+    '/api/v1/refund/direct/create',
+    data,
+  );
+}
+
+export async function auditRefundApi(data: {
+  approved: boolean;
+  auditRemark?: string;
+  refundId: number;
+}) {
+  return requestClient.post<RefundRecordItem>('/api/v1/refund/audit', data);
 }

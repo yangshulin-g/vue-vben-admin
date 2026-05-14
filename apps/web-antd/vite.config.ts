@@ -1,6 +1,6 @@
 import { defineConfig } from '@vben/vite-config';
 
-const BIZPORT_ADMIN_PORT = 5666;
+const BIZPORT_ADMIN_PORT = 5565;
 const BIZPORT_BACKEND_TARGET = 'http://localhost:9999';
 
 export default defineConfig(async () => {

@@ -63,6 +63,7 @@ export interface OrderDetailRes {
   customerRemark?: string;
   discountAmount?: number;
   finalAmount?: number;
+  fulfillmentOrders?: FulfillmentItem[];
   holdDeadline?: string;
   id: number;
   items?: OrderDetailItem[];
@@ -81,6 +82,67 @@ export interface AdminCreateOrderReq {
     quantity: number;
     skuCode: string;
   }>;
+}
+
+export interface FulfillmentItem {
+  createdAt?: string;
+  customerId?: number;
+  customerName?: string;
+  finishedAt?: string;
+  fulfillmentNo?: string;
+  id: number;
+  items?: Array<{
+    completedQuantity?: number;
+    id?: number;
+    productCode?: string;
+    productName?: string;
+    quantity?: number;
+    remark?: string;
+    skuAttributes?: string;
+    skuCode?: string;
+  }>;
+  logs?: Array<{
+    content?: string;
+    createdAt?: string;
+    id?: number;
+    operatorName?: string;
+    status?: string;
+  }>;
+  orderId?: number;
+  orderNo?: string;
+  planFinishAt?: string;
+  planStartAt?: string;
+  remark?: string;
+  source?: string;
+  status?: string;
+}
+
+export interface QuoteItem {
+  customerId?: number;
+  customerGroupId?: number;
+  customerGroupName?: string;
+  customerName?: string;
+  discountAmount?: number;
+  finalAmount?: number;
+  id: number;
+  items?: Array<{
+    basePrice?: number;
+    id?: number;
+    productCode?: string;
+    productName?: string;
+    quantity?: number;
+    quotePrice?: number;
+    remark?: string;
+    skuAttributes?: string;
+    skuCode?: string;
+    totalAmount?: number;
+  }>;
+  quoteNo?: string;
+  remark?: string;
+  status?: string;
+  targetType?: 'CUSTOMER' | 'CUSTOMER_GROUP';
+  totalAmount?: number;
+  validUntil?: string;
 }
 
 export async function getAdminOrderListApi(data: OrderListReq) {
@@ -141,6 +203,137 @@ export async function updateOrderRemarkApi(data: {
 export async function adminCreateOrderApi(data: AdminCreateOrderReq) {
   return requestClient.post<{ orderId?: number; orderNo?: string }>(
     '/api/v1/order/admin/create',
+    data,
+  );
+}
+
+export async function getFulfillmentListApi(data: {
+  orderId?: number;
+  orderNo?: string;
+  page: number;
+  size: number;
+  status?: string;
+}) {
+  return requestClient.post<BasePageRes<FulfillmentItem>>(
+    '/api/v1/fulfillment/list',
+    data,
+  );
+}
+
+export async function getFulfillmentDetailApi(data: { id: number }) {
+  return requestClient.post<FulfillmentItem>(
+    '/api/v1/fulfillment/detail',
+    data,
+  );
+}
+
+export async function createFulfillmentFromOrderApi(data: {
+  orderId: number;
+  planFinishAt?: string;
+  planStartAt?: string;
+  remark?: string;
+}) {
+  return requestClient.post<FulfillmentItem>(
+    '/api/v1/fulfillment/create-from-order',
+    data,
+  );
+}
+
+export async function updateFulfillmentApi(data: {
+  id: number;
+  planFinishAt?: string;
+  planStartAt?: string;
+  remark?: string;
+}) {
+  return requestClient.post<FulfillmentItem>(
+    '/api/v1/fulfillment/update',
+    data,
+  );
+}
+
+export async function updateFulfillmentStatusApi(data: {
+  id: number;
+  remark?: string;
+  status: string;
+}) {
+  return requestClient.post<FulfillmentItem>(
+    '/api/v1/fulfillment/status/update',
+    data,
+  );
+}
+
+export async function addFulfillmentProgressLogApi(data: {
+  content: string;
+  fulfillmentId: number;
+}) {
+  return requestClient.post<FulfillmentItem>(
+    '/api/v1/fulfillment/progress/log',
+    data,
+  );
+}
+
+export async function getQuoteListApi(data: {
+  customerGroupId?: number;
+  customerId?: number;
+  page: number;
+  quoteNo?: string;
+  size: number;
+  status?: string;
+  targetType?: string;
+}) {
+  return requestClient.post<BasePageRes<QuoteItem>>('/api/v1/quote/list', data);
+}
+
+export async function getQuoteDetailApi(data: { id: number }) {
+  return requestClient.post<QuoteItem>('/api/v1/quote/detail', data);
+}
+
+export async function createQuoteApi(data: {
+  customerGroupId?: number;
+  customerId?: number;
+  items: Array<{
+    quantity: number;
+    quotePrice: number;
+    remark?: string;
+    skuCode: string;
+  }>;
+  remark?: string;
+  targetType: 'CUSTOMER' | 'CUSTOMER_GROUP';
+  validUntil?: string;
+}) {
+  return requestClient.post<QuoteItem>('/api/v1/quote/create', data);
+}
+
+export async function updateQuoteApi(
+  data: Parameters<typeof createQuoteApi>[0] & {
+    id: number;
+  },
+) {
+  return requestClient.post<QuoteItem>('/api/v1/quote/update', data);
+}
+
+export async function updateQuoteStatusApi(data: {
+  id: number;
+  status: string;
+}) {
+  return requestClient.post<QuoteItem>('/api/v1/quote/status/update', data);
+}
+
+export async function exportQuoteApi(data: { id: number }) {
+  return requestClient.post<import('./product').FileContentRes>(
+    '/api/v1/quote/export',
+    data,
+  );
+}
+
+export async function convertQuoteToOrderApi(data: {
+  bizRemark?: string;
+  customerId?: number;
+  customerRemark?: string;
+  quoteId: number;
+}) {
+  return requestClient.post<{ orderId?: number; orderNo?: string }>(
+    '/api/v1/quote/convert-to-order',
     data,
   );
 }

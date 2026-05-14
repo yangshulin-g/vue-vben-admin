@@ -88,6 +88,48 @@ export interface ProductCategoryListItem {
   sort?: number;
 }
 
+export interface FileContentRes {
+  contentBase64: string;
+  contentType: string;
+  filename: string;
+}
+
+export interface ProductImportErrorItem {
+  errorMessage?: string;
+  fieldName?: string;
+  rowNo?: number;
+}
+
+export interface ProductImportRes {
+  errorRows?: number;
+  errors?: ProductImportErrorItem[];
+  importedRows?: number;
+  originalFilename?: string;
+  status?: string;
+  successRows?: number;
+  taskId?: number;
+  taskNo?: string;
+  totalRows?: number;
+}
+
+export interface PromotionItem {
+  activityName?: string;
+  activityType?: 'FULL_REDUCTION' | 'LIMITED_PRICE';
+  discountAmount?: number;
+  endAt?: string;
+  id: number;
+  remark?: string;
+  skuItems?: Array<{
+    activityId?: number;
+    activityPrice?: number;
+    id?: number;
+    skuCode?: string;
+  }>;
+  startAt?: string;
+  status?: 'ACTIVE' | 'DRAFT' | 'ENDED' | 'PAUSED';
+  thresholdAmount?: number;
+}
+
 export async function getProductListApi(data: ProductListReq) {
   return requestClient.post<ListPageRes<ProductListItem>>(
     '/api/v1/product/page',
@@ -190,6 +232,39 @@ export async function updateProductStatusApi(data: ProductStatusReq) {
   );
 }
 
+export async function getProductImportTemplateApi() {
+  return requestClient.get<FileContentRes>('/api/v1/product/import/template');
+}
+
+export async function validateProductImportApi(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return requestClient.post<ProductImportRes>(
+    '/api/v1/product/import/validate',
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    },
+  );
+}
+
+export async function confirmProductImportApi(data: { taskId: number }) {
+  return requestClient.post<ProductImportRes>(
+    '/api/v1/product/import/confirm',
+    data,
+  );
+}
+
+export async function exportProductApi(data: {
+  categoryId?: number;
+  productName?: string;
+  status?: string;
+}) {
+  return requestClient.post<FileContentRes>('/api/v1/product/export', data);
+}
+
 export async function getCategoryListApi(data: ProductCategoryListReq) {
   return requestClient.post<ListPageRes<ProductCategoryListItem>>(
     '/api/v1/category/page',
@@ -227,6 +302,53 @@ export async function updateCategoryApi(data: {
 export async function deleteCategoryApi(data: { id: number }) {
   return requestClient.post<{ success?: boolean }>(
     '/api/v1/category/delete',
+    data,
+  );
+}
+
+export async function getPromotionListApi(data: {
+  activityName?: string;
+  activityType?: string;
+  page: number;
+  size: number;
+  status?: string;
+}) {
+  return requestClient.post<ListPageRes<PromotionItem>>(
+    '/api/v1/promotion/list',
+    data,
+  );
+}
+
+export async function getPromotionDetailApi(data: { id: number }) {
+  return requestClient.post<PromotionItem>('/api/v1/promotion/detail', data);
+}
+
+export async function createPromotionApi(data: {
+  activityName: string;
+  activityType: string;
+  discountAmount?: number;
+  endAt?: string;
+  remark?: string;
+  skuItems?: Array<{ activityPrice: number; skuCode: string }>;
+  startAt?: string;
+  status?: string;
+  thresholdAmount?: number;
+}) {
+  return requestClient.post<PromotionItem>('/api/v1/promotion/create', data);
+}
+
+export async function updatePromotionApi(
+  data: Parameters<typeof createPromotionApi>[0] & { id: number },
+) {
+  return requestClient.post<PromotionItem>('/api/v1/promotion/update', data);
+}
+
+export async function updatePromotionStatusApi(data: {
+  id: number;
+  status: string;
+}) {
+  return requestClient.post<PromotionItem>(
+    '/api/v1/promotion/status/update',
     data,
   );
 }

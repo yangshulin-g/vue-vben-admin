@@ -72,6 +72,7 @@ export interface GroupItem {
   groupCode?: string;
   groupId: number;
   groupName?: string;
+  id?: number;
   sort?: number;
 }
 

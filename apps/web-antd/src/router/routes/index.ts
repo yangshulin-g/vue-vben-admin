@@ -30,7 +30,11 @@ const routes: RouteRecordRaw[] = [
 ];
 
 /** 基本路由列表，这些路由不需要进入权限拦截 */
-const coreRouteNames = traverseTreeValues(coreRoutes, (route) => route.name);
+const utilityRouteNames = new Set(['Profile', 'SystemAbout']);
+const coreRouteNames = traverseTreeValues(
+  coreRoutes,
+  (route) => route.name,
+).filter((name) => !utilityRouteNames.has(String(name)));
 
 /** 有权限校验的路由列表，包含动态路由和静态路由 */
 const accessRoutes = [...dynamicRoutes, ...staticRoutes];

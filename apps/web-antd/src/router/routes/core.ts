@@ -35,8 +35,31 @@ const coreRoutes: RouteRecordRaw[] = [
     },
     name: 'Root',
     path: '/',
-    redirect: preferences.app.defaultHomePath,
-    children: [],
+    redirect: LOGIN_PATH,
+    children: [
+      {
+        name: 'SystemAbout',
+        path: 'about',
+        component: () => import('#/views/_core/about/index.vue'),
+        meta: {
+          activePath: preferences.app.defaultHomePath,
+          hideInMenu: true,
+          icon: 'lucide:info',
+          title: '关于系统',
+        },
+      },
+      {
+        name: 'Profile',
+        path: 'profile',
+        component: () => import('#/views/_core/profile/index.vue'),
+        meta: {
+          activePath: preferences.app.defaultHomePath,
+          hideInMenu: true,
+          icon: 'lucide:user',
+          title: $t('page.auth.profile'),
+        },
+      },
+    ],
   },
   {
     component: AuthPageLayout,

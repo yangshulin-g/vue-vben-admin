@@ -3,6 +3,7 @@ import type {
   OrderListItem,
   ReconciliationPaymentItem,
   ReconciliationRes,
+  RefundRecordItem,
 } from '#/api';
 
 import { reactive, ref } from 'vue';
@@ -28,9 +29,12 @@ import {
 
 import {
   approvePaymentApi,
+  auditRefundApi,
+  directCreateRefundApi,
   getAdminOrderListApi,
   getOrderPaymentListApi,
   getOrderReconciliationApi,
+  getRefundListApi,
   mockConfirmPaymentApi,
   processPaymentApi,
   rejectPaymentApi,
@@ -45,9 +49,11 @@ const loading = ref(false);
 const actionLoading = ref(false);
 const detail = ref<null | ReconciliationRes>(null);
 const payments = ref<ReconciliationPaymentItem[]>([]);
+const refunds = ref<RefundRecordItem[]>([]);
 const createOpen = ref(false);
 const editOpen = ref(false);
 const auditOpen = ref(false);
+const refundOpen = ref(false);
 
 const form = reactive({
   orderId: undefined as number | undefined,
@@ -77,8 +83,14 @@ const auditForm = reactive({
   id: undefined as number | undefined,
 });
 
+const refundForm = reactive({
+  paymentId: undefined as number | undefined,
+  reason: '',
+  refundAmount: 0,
+});
+
 const paymentColumns = [
-  { dataIndex: 'id', key: 'id', title: '支付ID', width: 90 },
+  { dataIndex: 'id', key: 'id', title: '支付记录号', width: 110 },
   {
     dataIndex: 'paymentMethod',
     key: 'paymentMethod',
@@ -107,6 +119,21 @@ const paymentColumns = [
   { dataIndex: 'paymentSn', key: 'paymentSn', title: '流水号', width: 180 },
   { dataIndex: 'remark', key: 'remark', title: '备注' },
   { key: 'actions', title: '操作', width: 220 },
+];
+
+const refundColumns = [
+  { dataIndex: 'refundNo', key: 'refundNo', title: '退款单号', width: 180 },
+  { dataIndex: 'paymentId', key: 'paymentId', title: '支付ID', width: 90 },
+  {
+    dataIndex: 'refundAmount',
+    key: 'refundAmount',
+    title: '退款金额',
+    width: 100,
+  },
+  { dataIndex: 'source', key: 'source', title: '来源', width: 100 },
+  { dataIndex: 'status', key: 'status', title: '状态', width: 130 },
+  { dataIndex: 'reason', key: 'reason', title: '原因' },
+  { key: 'refundActions', title: '操作', width: 180 },
 ];
 
 const paymentStatusColorMap: Record<string, string> = {
@@ -152,17 +179,16 @@ const canReject = () =>
   accessStore.accessCodes.includes('payment:audit:reject');
 const canMockConfirm = () =>
   accessStore.accessCodes.includes('payment:callback:mock-confirm');
+const canRefundList = () => accessStore.accessCodes.includes('refund:list');
+const canDirectRefund = () =>
+  accessStore.accessCodes.includes('refund:direct:create');
+const canAuditRefund = () => accessStore.accessCodes.includes('refund:audit');
 
 async function resolveOrderId() {
   const keyword = `${form.orderKeyword || ''}`.trim();
   if (!keyword) {
-    message.warning('请先输入订单ID或订单号');
+    message.warning('请先输入订单号');
     return false;
-  }
-
-  if (/^\d+$/.test(keyword)) {
-    form.orderId = Number(keyword);
-    return true;
   }
 
   const res = await getAdminOrderListApi({
@@ -188,6 +214,7 @@ async function queryReconciliation() {
     if (!resolved || !form.orderId) {
       detail.value = null;
       payments.value = [];
+      refunds.value = [];
       return;
     }
 
@@ -198,8 +225,54 @@ async function queryReconciliation() {
     });
     const listRes = await getOrderPaymentListApi({ orderId: form.orderId });
     payments.value = listRes.list || detail.value.payments || [];
+    if (canRefundList()) {
+      const refundRes = await getRefundListApi({
+        orderId: form.orderId,
+        page: 1,
+        size: 100,
+      });
+      refunds.value = refundRes.list || [];
+    }
   } finally {
     loading.value = false;
+  }
+}
+
+function openRefund(record: ReconciliationPaymentItem) {
+  refundForm.paymentId = record.id;
+  refundForm.refundAmount = Number(record.amount || 0);
+  refundForm.reason = '';
+  refundOpen.value = true;
+}
+
+async function submitRefund() {
+  if (!refundForm.paymentId || !refundForm.refundAmount) {
+    return;
+  }
+  actionLoading.value = true;
+  try {
+    await directCreateRefundApi({
+      paymentId: refundForm.paymentId,
+      reason: refundForm.reason || undefined,
+      refundAmount: refundForm.refundAmount,
+    });
+    message.success('手动退款已提交');
+    refundOpen.value = false;
+    await queryReconciliation();
+  } finally {
+    actionLoading.value = false;
+  }
+}
+
+async function auditRefund(record: RefundRecordItem, approved: boolean) {
+  if (!record.id) return;
+  actionLoading.value = true;
+  try {
+    await auditRefundApi({ approved, refundId: record.id });
+    message.success(approved ? '退款审核通过' : '退款已驳回');
+    await queryReconciliation();
+  } finally {
+    actionLoading.value = false;
   }
 }
 
@@ -324,11 +397,11 @@ async function doMockConfirm(id?: number) {
   <Page title="支付对账">
     <Card class="mb-4">
       <Form layout="inline">
-        <Form.Item label="订单">
+        <Form.Item label="订单号">
           <Input
             v-model:value="form.orderKeyword"
             allow-clear
-            placeholder="请输入订单ID或订单号"
+            placeholder="请输入订单号"
             style="width: 220px"
           />
         </Form.Item>
@@ -348,7 +421,7 @@ async function doMockConfirm(id?: number) {
         </Form.Item>
       </Form>
       <div class="mt-3 text-xs text-gray-500">
-        支持直接输入订单内部 ID，或从订单列表复制订单号后在这里查询。
+        请从订单列表复制订单号后在这里查询支付对账。
       </div>
     </Card>
 
@@ -362,9 +435,6 @@ async function doMockConfirm(id?: number) {
       >
         <Descriptions.Item label="订单号">
           {{ detail.orderNo }}
-        </Descriptions.Item>
-        <Descriptions.Item label="订单ID">
-          {{ detail.orderId }}
         </Descriptions.Item>
         <Descriptions.Item label="支付状态">
           <Tag
@@ -505,6 +575,61 @@ async function doMockConfirm(id?: number) {
               >
                 <Button size="small" type="link">模拟到账</Button>
               </Popconfirm>
+              <Button
+                v-if="
+                  canDirectRefund() &&
+                  (record as ReconciliationPaymentItem).paymentMethod ===
+                    'wechat' &&
+                  (record as ReconciliationPaymentItem).paymentStatus === 'PAID'
+                "
+                size="small"
+                type="link"
+                @click="openRefund(record as ReconciliationPaymentItem)"
+              >
+                手动退款
+              </Button>
+            </Space>
+          </template>
+        </template>
+      </Table>
+
+      <Table
+        v-if="canRefundList()"
+        :columns="refundColumns"
+        :data-source="refunds"
+        :pagination="false"
+        :scroll="{ x: 1000 }"
+        class="mt-4"
+        row-key="id"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'status'">
+            <Tag>
+              {{ (record as RefundRecordItem).status || '-' }}
+            </Tag>
+          </template>
+          <template v-else-if="column.key === 'refundActions'">
+            <Space
+              v-if="
+                canAuditRefund() &&
+                (record as RefundRecordItem).status === 'PENDING_REVIEW'
+              "
+            >
+              <Button
+                size="small"
+                type="link"
+                @click="auditRefund(record as RefundRecordItem, true)"
+              >
+                通过
+              </Button>
+              <Button
+                danger
+                size="small"
+                type="link"
+                @click="auditRefund(record as RefundRecordItem, false)"
+              >
+                驳回
+              </Button>
             </Space>
           </template>
         </template>
@@ -612,6 +737,26 @@ async function doMockConfirm(id?: number) {
                 : '可选，填写驳回原因'
             "
           />
+        </Form.Item>
+      </Form>
+    </Modal>
+
+    <Modal
+      v-model:open="refundOpen"
+      :confirm-loading="actionLoading"
+      title="手动微信退款"
+      @ok="submitRefund"
+    >
+      <Form layout="vertical">
+        <Form.Item label="退款金额" required>
+          <InputNumber
+            v-model:value="refundForm.refundAmount"
+            :min="0"
+            style="width: 100%"
+          />
+        </Form.Item>
+        <Form.Item label="退款原因">
+          <Input.TextArea v-model:value="refundForm.reason" :rows="3" />
         </Form.Item>
       </Form>
     </Modal>

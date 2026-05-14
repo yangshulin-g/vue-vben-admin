@@ -54,7 +54,7 @@ export function clearSession() {
 export function getCurrentCustomerId() {
   const customerId = sessionState.user?.customerId;
   if (!customerId) {
-    throw new Error('未获取到客户ID，请重新登录');
+    throw new Error('未获取到客户信息，请重新登录');
   }
   return Number(customerId);
 }

@@ -16,7 +16,6 @@ import {
   Descriptions,
   Form,
   Input,
-  InputNumber,
   message,
   Modal,
   Popconfirm,
@@ -443,13 +442,6 @@ loadData();
         <Form.Item label="联系地址">
           <Input v-model:value="createForm.contactAddress" />
         </Form.Item>
-        <Form.Item label="业务员ID">
-          <InputNumber
-            v-model:value="createForm.salesmanId"
-            :min="1"
-            style="width: 100%"
-          />
-        </Form.Item>
         <Form.Item label="备注">
           <Input v-model:value="createForm.remark" />
         </Form.Item>
@@ -490,13 +482,6 @@ loadData();
         <Form.Item label="联系地址">
           <Input v-model:value="editForm.contactAddress" />
         </Form.Item>
-        <Form.Item label="业务员ID">
-          <InputNumber
-            v-model:value="editForm.salesmanId"
-            :min="1"
-            style="width: 100%"
-          />
-        </Form.Item>
         <Form.Item label="备注">
           <Input v-model:value="editForm.remark" />
         </Form.Item>
@@ -511,9 +496,6 @@ loadData();
     >
       <div v-if="detailLoading">加载中...</div>
       <Descriptions v-else-if="detailData" :column="2" bordered size="small">
-        <Descriptions.Item label="客户ID">
-          {{ detailData.id }}
-        </Descriptions.Item>
         <Descriptions.Item label="客户编码">
           {{ detailData.customerCode }}
         </Descriptions.Item>
@@ -525,9 +507,6 @@ loadData();
         </Descriptions.Item>
         <Descriptions.Item label="状态">
           {{ statusText(detailData.status) }}
-        </Descriptions.Item>
-        <Descriptions.Item label="业务员ID">
-          {{ detailData.salesmanId || '-' }}
         </Descriptions.Item>
         <Descriptions.Item label="联系人">
           {{ detailData.contactPerson || '-' }}

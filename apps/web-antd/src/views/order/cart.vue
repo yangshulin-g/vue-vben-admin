@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { CartItem } from '#/api';
+import type { CartItem, CustomerItem } from '#/api';
 
 import { reactive, ref } from 'vue';
 
@@ -22,6 +22,7 @@ import {
 
 import {
   addToCartApi,
+  getCustomerListApi,
   getShoppingCartListApi,
   removeFromCartApi,
   updateCartQuantityApi,
@@ -38,13 +39,14 @@ const addOpen = ref(false);
 const accessStore = useAccessStore();
 
 const form = reactive({
+  customerKeyword: '',
   customerId: undefined as number | undefined,
   page: 1,
   size: 20,
 });
 
 const columns = [
-  { dataIndex: 'id', key: 'id', title: '购物车ID' },
+  { dataIndex: 'id', key: 'id', title: '购物车行号' },
   { dataIndex: 'productCode', key: 'productCode', title: '商品编码' },
   { dataIndex: 'productName', key: 'productName', title: '商品名称' },
   { dataIndex: 'skuCode', key: 'skuCode', title: 'SKU' },
@@ -55,7 +57,7 @@ const columns = [
 ];
 
 const addForm = reactive({
-  customerId: undefined as number | undefined,
+  customerKeyword: '',
   productCode: '',
   quantity: 1,
   skuCode: '',
@@ -66,8 +68,75 @@ const editForm = reactive({
   quantity: 1,
 });
 
+function isCustomerMatched(item: CustomerItem, keyword: string) {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  return [
+    item.customerCode,
+    item.customerName,
+    item.contactPhone,
+    item.contactPerson,
+  ].some(
+    (value) => `${value || ''}`.trim().toLowerCase() === normalizedKeyword,
+  );
+}
+
+function isCustomerFuzzyMatched(item: CustomerItem, keyword: string) {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  return [
+    item.customerCode,
+    item.customerName,
+    item.contactPhone,
+    item.contactPerson,
+  ].some((value) =>
+    `${value || ''}`.trim().toLowerCase().includes(normalizedKeyword),
+  );
+}
+
+async function resolveCustomer(keyword: string) {
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword) {
+    message.warning('请先输入客户编码、名称或手机号');
+    return;
+  }
+
+  const res = await getCustomerListApi({ page: 1, size: 500 });
+  const customers = res.list ?? [];
+  const exactMatched = customers.filter((item) =>
+    isCustomerMatched(item, normalizedKeyword),
+  );
+  const fuzzyMatched =
+    exactMatched.length > 0
+      ? exactMatched
+      : customers.filter((item) =>
+          isCustomerFuzzyMatched(item, normalizedKeyword),
+        );
+
+  if (fuzzyMatched.length === 0) {
+    message.warning('未找到对应客户，请检查客户编码、名称或手机号');
+    return;
+  }
+  if (fuzzyMatched.length > 1) {
+    message.warning('匹配到多个客户，请输入更完整的客户编码或手机号');
+    return;
+  }
+  return fuzzyMatched[0];
+}
+
+async function resolveQueryCustomer() {
+  const customer = await resolveCustomer(form.customerKeyword);
+  if (!customer?.customerId) {
+    form.customerId = undefined;
+    return false;
+  }
+  form.customerId = customer.customerId;
+  return true;
+}
+
 async function loadData() {
-  if (!form.customerId) {
+  const resolved = await resolveQueryCustomer();
+  if (!resolved || !form.customerId) {
+    dataSource.value = [];
+    total.value = 0;
     return;
   }
   loading.value = true;
@@ -85,6 +154,7 @@ async function loadData() {
 }
 
 function onReset() {
+  form.customerKeyword = '';
   form.customerId = undefined;
   dataSource.value = [];
   total.value = 0;
@@ -103,7 +173,7 @@ function canRemove() {
 }
 
 function openAdd() {
-  addForm.customerId = form.customerId;
+  addForm.customerKeyword = form.customerKeyword;
   addForm.productCode = '';
   addForm.skuCode = '';
   addForm.quantity = 1;
@@ -111,26 +181,29 @@ function openAdd() {
 }
 
 async function submitAdd() {
+  const customer = await resolveCustomer(addForm.customerKeyword);
+  const customerId = customer?.customerId;
   if (
-    !addForm.customerId ||
+    !customerId ||
     !addForm.productCode ||
     !addForm.skuCode ||
     !addForm.quantity
   ) {
-    message.warning('请填写客户ID、商品编码、SKU编码和数量');
+    message.warning('请填写客户编码/名称/手机号、商品编码、SKU编码和数量');
     return;
   }
   actionLoading.value = true;
   try {
     await addToCartApi({
-      customerId: addForm.customerId,
+      customerId,
       productCode: addForm.productCode,
       quantity: addForm.quantity,
       skuCode: addForm.skuCode,
     });
     message.success('添加购物车成功');
     addOpen.value = false;
-    form.customerId = addForm.customerId;
+    form.customerId = customerId;
+    form.customerKeyword = addForm.customerKeyword;
     await loadData();
   } finally {
     actionLoading.value = false;
@@ -178,12 +251,12 @@ async function removeItem(item: CartItem) {
     </Alert>
     <Card class="mb-4">
       <Form layout="inline">
-        <Form.Item label="客户ID">
-          <InputNumber
-            v-model:value="form.customerId"
-            :min="1"
-            placeholder="请输入客户ID"
-            style="width: 180px"
+        <Form.Item label="客户">
+          <Input
+            v-model:value="form.customerKeyword"
+            allow-clear
+            placeholder="请输入客户编码、名称或手机号"
+            style="width: 260px"
           />
         </Form.Item>
         <Form.Item>
@@ -235,12 +308,11 @@ async function removeItem(item: CartItem) {
       @ok="submitAdd"
     >
       <Form layout="vertical">
-        <Form.Item label="客户ID" required>
-          <InputNumber
-            v-model:value="addForm.customerId"
-            :min="1"
-            placeholder="请输入客户ID"
-            style="width: 100%"
+        <Form.Item label="客户" required>
+          <Input
+            v-model:value="addForm.customerKeyword"
+            allow-clear
+            placeholder="请输入客户编码、名称或手机号"
           />
         </Form.Item>
         <Form.Item label="商品编码" required>

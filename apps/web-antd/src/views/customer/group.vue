@@ -26,6 +26,7 @@ import {
   createCustomerGroupApi,
   deleteCustomerGroupApi,
   getCustomerGroupListApi,
+  getCustomerListApi,
   getGroupCustomersApi,
   getGroupPriceListApi,
   removeCustomerFromGroupApi,
@@ -52,7 +53,7 @@ const currentGroupId = ref<null | number>(null);
 const groupCustomers = ref<CustomerItem[]>([]);
 const addMemberLoading = ref(false);
 const addMemberForm = reactive({
-  customerId: undefined as number | undefined,
+  customerKeyword: '',
 });
 
 const priceOpen = ref(false);
@@ -134,6 +135,60 @@ function statusText(enabled?: number) {
   return enabled === 1 ? '启用' : '禁用';
 }
 
+function isCustomerMatched(item: CustomerItem, keyword: string) {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  return [
+    item.customerCode,
+    item.customerName,
+    item.contactPhone,
+    item.contactPerson,
+  ].some(
+    (value) => `${value || ''}`.trim().toLowerCase() === normalizedKeyword,
+  );
+}
+
+function isCustomerFuzzyMatched(item: CustomerItem, keyword: string) {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  return [
+    item.customerCode,
+    item.customerName,
+    item.contactPhone,
+    item.contactPerson,
+  ].some((value) =>
+    `${value || ''}`.trim().toLowerCase().includes(normalizedKeyword),
+  );
+}
+
+async function resolveCustomer(keyword: string) {
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword) {
+    message.warning('请输入客户编码、名称或手机号');
+    return;
+  }
+
+  const res = await getCustomerListApi({ page: 1, size: 500 });
+  const customers = res.list ?? [];
+  const exactMatched = customers.filter((item) =>
+    isCustomerMatched(item, normalizedKeyword),
+  );
+  const fuzzyMatched =
+    exactMatched.length > 0
+      ? exactMatched
+      : customers.filter((item) =>
+          isCustomerFuzzyMatched(item, normalizedKeyword),
+        );
+
+  if (fuzzyMatched.length === 0) {
+    message.warning('未找到对应客户，请检查客户编码、名称或手机号');
+    return;
+  }
+  if (fuzzyMatched.length > 1) {
+    message.warning('匹配到多个客户，请输入更完整的客户编码或手机号');
+    return;
+  }
+  return fuzzyMatched[0];
+}
+
 async function loadData() {
   loading.value = true;
   try {
@@ -169,23 +224,24 @@ async function openGroupCustomers(group: GroupItem) {
   detailOpen.value = true;
   currentGroupName.value = group.groupName || '';
   currentGroupId.value = group.groupId;
-  addMemberForm.customerId = undefined;
+  addMemberForm.customerKeyword = '';
   await loadGroupCustomers();
 }
 
 async function addMemberToCurrentGroup() {
-  if (!currentGroupId.value || !addMemberForm.customerId) {
-    message.warning('请输入客户ID');
+  const customer = await resolveCustomer(addMemberForm.customerKeyword);
+  const customerId = customer?.customerId;
+  if (!currentGroupId.value || !customerId) {
     return;
   }
   addMemberLoading.value = true;
   try {
     await addCustomerToGroupApi({
-      customerIds: [addMemberForm.customerId],
+      customerIds: [customerId],
       groupId: currentGroupId.value,
     });
     message.success('添加成员成功');
-    addMemberForm.customerId = undefined;
+    addMemberForm.customerKeyword = '';
     await loadGroupCustomers();
   } finally {
     addMemberLoading.value = false;
@@ -483,12 +539,12 @@ loadData();
     >
       <Card class="mb-4">
         <Form layout="inline">
-          <Form.Item label="客户ID">
-            <InputNumber
-              v-model:value="addMemberForm.customerId"
-              :min="1"
-              placeholder="请输入客户ID"
-              style="width: 200px"
+          <Form.Item label="客户">
+            <Input
+              v-model:value="addMemberForm.customerKeyword"
+              allow-clear
+              placeholder="请输入客户编码、名称或手机号"
+              style="width: 260px"
             />
           </Form.Item>
           <Form.Item>

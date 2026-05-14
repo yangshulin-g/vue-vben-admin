@@ -15,15 +15,18 @@ import {
   message,
   Select,
   Space,
+  Switch,
   Table,
   Tabs,
 } from 'ant-design-vue';
 
 import {
   getStockAlertListApi,
+  getStockConfigApi,
   getStockLogListApi,
   stockAdjustApi,
   updateStockAlertThresholdApi,
+  updateStockConfigApi,
 } from '#/api';
 
 defineOptions({ name: 'StockManagePage' });
@@ -36,6 +39,10 @@ const canLogList = () => accessStore.accessCodes.includes('stock:log:list');
 const canAlertList = () => accessStore.accessCodes.includes('stock:alert:list');
 const canAlertUpdate = () =>
   accessStore.accessCodes.includes('stock:alert:update');
+const canStockConfigDetail = () =>
+  accessStore.accessCodes.includes('stock:config:detail');
+const canStockConfigUpdate = () =>
+  accessStore.accessCodes.includes('stock:config:update');
 
 const adjustLoading = ref(false);
 const adjustForm = reactive({
@@ -87,6 +94,10 @@ const thresholdForm = reactive({
   threshold: 10,
 });
 const thresholdLoading = ref(false);
+const stockConfigLoading = ref(false);
+const stockConfig = reactive({
+  allowOversell: false,
+});
 
 async function submitAdjust() {
   if (!adjustForm.skuCode.trim() || adjustForm.quantity <= 0) {
@@ -174,6 +185,29 @@ async function submitThreshold() {
   }
 }
 
+async function loadStockConfig() {
+  if (!canStockConfigDetail()) return;
+  stockConfigLoading.value = true;
+  try {
+    const res = await getStockConfigApi();
+    stockConfig.allowOversell = !!res.allowOversell;
+  } finally {
+    stockConfigLoading.value = false;
+  }
+}
+
+async function saveStockConfig(value: unknown) {
+  stockConfigLoading.value = true;
+  try {
+    const res = await updateStockConfigApi({ allowOversell: !!value });
+    stockConfig.allowOversell = !!res.allowOversell;
+    message.success('库存下单配置已更新');
+  } finally {
+    stockConfigLoading.value = false;
+  }
+}
+
+loadStockConfig();
 loadLogList();
 loadAlertList();
 </script>
@@ -182,6 +216,28 @@ loadAlertList();
   <Page title="库存管理">
     <Card>
       <Tabs v-model:active-key="activeKey">
+        <Tabs.TabPane key="config" tab="下单配置">
+          <Form layout="vertical">
+            <Form.Item label="允许库存不足继续下单">
+              <Space>
+                <Switch
+                  v-model:checked="stockConfig.allowOversell"
+                  :disabled="!canStockConfigUpdate()"
+                  :loading="stockConfigLoading"
+                  @change="saveStockConfig"
+                />
+                <span>
+                  {{
+                    stockConfig.allowOversell
+                      ? '已开启，支付后按缺货数量生成备货单'
+                      : '已关闭，保持严格库存扣减'
+                  }}
+                </span>
+              </Space>
+            </Form.Item>
+          </Form>
+        </Tabs.TabPane>
+
         <Tabs.TabPane key="adjust" tab="手动调整">
           <Form layout="vertical">
             <Form.Item label="SKU编码" required>

@@ -42,6 +42,7 @@ import {
   cancelOrderApi,
   confirmReceiptApi,
   confirmShipmentApi,
+  createFulfillmentFromOrderApi,
   getAdminOrderListApi,
   getCustomerListApi,
   getOrderDetailApi,
@@ -182,10 +183,13 @@ const canRemarkUpdate = computed(() =>
 const canAdminCreate = computed(() =>
   accessStore.accessCodes.includes('order:admin:create'),
 );
+const canCreateFulfillment = computed(() =>
+  accessStore.accessCodes.includes('fulfillment:create'),
+);
 
 const customerSelectOptions = computed(() =>
   customerOptions.value.map((item) => ({
-    label: `${item.customerName || '-'} / ${item.contactPerson || '-'} / ${item.contactPhone || '-'}`,
+    label: `${item.customerName || '-'} (${item.customerCode || '-'}) / ${item.contactPerson || '-'} / ${item.contactPhone || '-'}`,
     value: item.customerId,
   })),
 );
@@ -210,6 +214,16 @@ const estimatedAmount = computed(() =>
     0,
   ),
 );
+
+function getCreateOrderProductName(item: OrderCreateItemForm) {
+  if (!item.productId) return '-';
+  return (
+    productDetailCache[item.productId]?.productName ||
+    productSearchOptions.value.find((product) => product.id === item.productId)
+      ?.productName ||
+    '-'
+  );
+}
 
 const createOrderSteps = [
   { title: '选择客户' },
@@ -482,6 +496,23 @@ async function openDetail(orderId: number) {
   detailOpen.value = true;
   try {
     detailData.value = await getOrderDetailApi({ orderId });
+  } finally {
+    detailLoading.value = false;
+  }
+}
+
+async function createFulfillmentFromDetail() {
+  if (!detailData.value?.id) return;
+  detailLoading.value = true;
+  try {
+    await createFulfillmentFromOrderApi({
+      orderId: detailData.value.id,
+      remark: '订单详情手动生成备货单',
+    });
+    message.success('备货单已生成');
+    detailData.value = await getOrderDetailApi({
+      orderId: detailData.value.id,
+    });
   } finally {
     detailLoading.value = false;
   }
@@ -880,6 +911,40 @@ loadOrderList();
           row-key="skuCode"
           size="small"
         />
+
+        <div class="mb-3 mt-4 flex items-center justify-between">
+          <div class="text-base font-medium">关联备货单</div>
+          <Button
+            v-if="canCreateFulfillment"
+            :loading="detailLoading"
+            size="small"
+            type="primary"
+            @click="createFulfillmentFromDetail"
+          >
+            生成备货单
+          </Button>
+        </div>
+        <Table
+          :columns="[
+            {
+              dataIndex: 'fulfillmentNo',
+              key: 'fulfillmentNo',
+              title: '备货单号',
+            },
+            { dataIndex: 'status', key: 'status', title: '状态' },
+            { dataIndex: 'planStartAt', key: 'planStartAt', title: '计划开始' },
+            {
+              dataIndex: 'planFinishAt',
+              key: 'planFinishAt',
+              title: '计划完成',
+            },
+            { dataIndex: 'createdAt', key: 'createdAt', title: '创建时间' },
+          ]"
+          :data-source="detailData.fulfillmentOrders || []"
+          :pagination="false"
+          row-key="id"
+          size="small"
+        />
       </div>
     </Modal>
 
@@ -1190,7 +1255,7 @@ loadOrderList();
 
           <Table
             :columns="[
-              { dataIndex: 'productId', key: 'productId', title: '商品ID' },
+              { dataIndex: 'productName', key: 'productName', title: '商品' },
               { dataIndex: 'skuCode', key: 'skuCode', title: 'SKU编码' },
               { dataIndex: 'unitPrice', key: 'unitPrice', title: '原价单价' },
               { dataIndex: 'quantity', key: 'quantity', title: '数量' },
@@ -1199,7 +1264,7 @@ loadOrderList();
             :data-source="
               createOrderForm.items.map((item) => ({
                 key: item.key,
-                productId: item.productId,
+                productName: getCreateOrderProductName(item),
                 quantity: item.quantity,
                 skuCode: item.skuCode,
                 subtotal: (
