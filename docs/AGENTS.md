@@ -1,12 +1,14 @@
 # Repository Guidelines
 
 ## Scope
+
 - These instructions apply to the entire workspace rooted here.
 - The workspace contains a Spring Boot backend in `BizPort/`, a pnpm/Vue admin monorepo in `vue-vben-admin/`, and a customer H5 storefront in `bizport-h5/`.
 - Check for more-specific `AGENTS.md` files before editing nested directories; nested instructions override these.
 - For BizPort backend work, always consider the documents under `BizPort/doc/` and `BizPort/docs/` before changing behavior.
 
 ## General Workflow
+
 - Keep changes focused on the requested task and avoid unrelated refactors.
 - Prefer `rg`/`rg --files` for searches.
 - Use `apply_patch` for file edits.
@@ -14,6 +16,7 @@
 - When adding or changing behavior, update nearby tests or docs if the project already has an obvious place for them.
 
 ## Backend: `BizPort/`
+
 - Product positioning: single-merchant, single-tenant wholesale ordering/admin system for county-level apparel/shoes merchants; it is not yet a multi-tenant SaaS platform.
 - Current state: MVP admin backend is mostly usable; customer-facing storefront lives in `bizport-h5/`.
 - Java version: 17; default local Java may be 8, so set `JAVA_HOME` to a JDK 17 before Maven commands if needed.
@@ -28,6 +31,7 @@
 - Local file storage uses `./uploads` with URL prefix `/uploads`.
 
 ## BizPort Backend Architecture
+
 - Follow the documented layering: `Controller -> Handler -> Service -> Mapper -> DB`.
 - Controllers must extend `BaseController`, validate request DTOs, call `processHandler`, and return `BaseResponse.success(...)`; do not call `handler.doBusiness()` directly.
 - Handlers are the only business orchestration and transaction boundary; implement `IBusinessHandler` and put `@Transactional(rollbackFor = Exception.class)` on `doBusiness`.
@@ -37,6 +41,7 @@
 - Mappers are the database access layer and may use MyBatis annotations or XML.
 
 ## BizPort Coding Rules
+
 - Request DTOs must extend `BaseRequest`, be named `*Req`, and include JSR-303 validation annotations.
 - Response DTOs must implement `Serializable`, be named `*Res`, and use the unified response model.
 - Pagination uses `pageNo` and `pageSize` in requests, and `total` plus `records` in responses.
@@ -48,6 +53,7 @@
 - Time fields are `created_at` and `updated_at`, not `create_time` or `update_time`.
 
 ## BizPort Permissions and Frontend Coupling
+
 - Admin frontend menus and permissions are database-driven, not hardcoded only in the frontend.
 - When adding backend permissions, keep the three parts in sync: backend permission code, database menu/button permission rows, and frontend permission usage.
 - New permissions or menus must be reflected in both full initialization SQL and incremental migration SQL when appropriate.
@@ -55,6 +61,7 @@
 - Customer H5 permissions are also real backend permissions. When exposing an endpoint to H5 customers, keep Sa-Token permission annotations and `CustomerAccessPolicy` in sync; do not bypass permission failures in H5 with mock data.
 
 ## BizPort Security and Risk Notes
+
 - Do not log sensitive fields such as passwords, tokens, or secrets; operation logging is known to need masking.
 - After password reset/change flows, invalidate old Sa-Token sessions where appropriate.
 - Avoid user-enumeration login errors; prefer a generic username/password failure message.
@@ -63,6 +70,7 @@
 - `mvn test` may require real local PostgreSQL/Redis and can fail in sandboxed environments for connectivity rather than compile reasons.
 
 ## Frontend: `vue-vben-admin/`
+
 - Package manager: pnpm.
 - Node engine: see `vue-vben-admin/package.json`.
 - Run pnpm commands from `vue-vben-admin/`.
@@ -78,6 +86,7 @@
 - Before production builds, verify BizPort API configuration because existing production env may still point to upstream Vben mock services.
 
 ## Frontend: `bizport-h5/`
+
 - Product surface: customer-facing H5 storefront for the single-merchant wholesale ordering system. It is the active H5 implementation; archived experiments live under `archive/h5-experiments/`.
 - Stack: uni-app + Vue 3 + TypeScript + Pinia. Do not introduce React, Tailwind, lucide-react, motion, or other Figma-export runtime dependencies into this app.
 - UI library: use Wot UI (`@wot-ui/ui`) in npm mode for controls, feedback, tab bars, popups, loading states, and form inputs. Do not switch to `uni_modules` unless explicitly requested.
@@ -123,6 +132,7 @@
 - Current unfinished H5 payment work: WeChat H5/JSAPI payment depends on real merchant configuration, callback domain, and backend return fields; the frontend should handle returned fields but should not invent merchant/payment backend behavior.
 
 ## Real Commerce Data Governance
+
 - Treat BizPort as a real wholesale storefront, not a demo app. H5 and admin-visible data should look like county-level apparel/shoes wholesale operations: apparel categories, real customer names, realistic order snapshots, meaningful SKU specs, prices, inventory, and payment states.
 - Prefer page-first investigation for H5/admin issues. Use the in-app browser to inspect visible UI and verify fixes; use commands, SQL, and APIs for root-cause analysis, bulk data repair, and final validation.
 - Do not use frontend mock data, fake counters, fake coupons, fake points, fake payment methods, fake bank accounts, fake favorites, or "saved locally" behavior. If a backend capability is missing, show a clear unavailable/empty state instead.
@@ -131,6 +141,7 @@
 - When changing product categories, keep `product_category.parent_id`, `path`, H5 category display, and product `category_id` consistent. Do not rely on category `path` containing business codes if backend code expects numeric IDs; prefer `parent_id` for category path logic.
 
 ## Product, SKU, and Image Rules
+
 - Real products must include a product code, name, business description, category, unit, status, main image, SKU list, prices, stock, and realistic specs such as `color`, `size`, and `material`.
 - Product and order specs shown to users should be localized: `color -> 颜色`, `size -> 尺码`, `material -> 材质`. Avoid exposing electronics-specific keys such as `storage`, `memory`, `processor`, or `resolution` for apparel products.
 - If there is no real sales metric, do not show `已售 0`. Prefer true inventory language such as `现货` or `仓库现货` based on backend stock.
@@ -139,6 +150,7 @@
 - Prefer PNG/JPG/WebP product images for H5. SVG may be accessible by URL but still fail to render reliably in `uni-image`.
 
 ## Orders and Payment Realism
+
 - H5 order list/detail should use real backend order/customer/payment data. Do not hide backend errors with generic product combinations or hardcoded order counts.
 - Order status and payment status should be user-facing Chinese text, not raw backend enum values such as `CREATED`.
 - Order-level payment statuses are `UNPAID`, `PARTIALLY_PAID`, and `FULLY_PAID`; payment-record statuses such as `PAID`, `SUBMITTED`, and `PENDING` are not interchangeable.
@@ -146,6 +158,7 @@
 - Do not invent Alipay, fake bank accounts, fake discounts, or fake payment assets. Payment UI should only expose real backend-supported flows such as WeChat prepay and offline/bank-transfer registration.
 
 ## Suggested Agent Responsibilities
+
 - H5 page QA agent: inspect Home, Category, Product Detail, Cart, Orders, Order Detail, Payment, and Mine in the browser; flag visible fake data, gray images, enum leaks, or broken empty states.
 - Data governance agent: maintain realistic products, SKUs, customers, orders, payment records, categories, and visibility flags in PostgreSQL and SQL migrations.
 - Storage/image agent: upload product assets to MinIO, update DB image URLs, and verify H5 `uni-image` renders real images.
@@ -153,5 +166,6 @@
 - Payment/order agent: validate payment audit states, reconciliation display, order actions, and status labels across H5 and admin.
 
 ## Validation
+
 - Start with the most targeted validation for the changed area, then run broader checks when appropriate.
 - If validation cannot be run due to sandboxing, missing dependencies, or required services, report that clearly with the exact command to run.
