@@ -18,6 +18,10 @@
 
 Vue Vben Admin 是 Vue Vben Admin 的升级版本。作为一个免费开源的中后台模板，它采用了最新的 Vue 3、Vite、TypeScript 等主流技术开发，开箱即用，可用于中后台前端开发，也适合学习参考。
 
+## BizPort Agent 指南
+
+BizPort 项目协作规则已放在 [`docs/AGENTS.md`](docs/AGENTS.md)。修改 admin 菜单、权限、接口联调、真实业务数据展示前，请先阅读该文档。
+
 ## 升级提示
 
 该版本为最新版本 `5.0`，与其他版本不兼容，如果你是新项目，建议使用最新版本。如果你想查看旧版本，请使用 [v2 分支](https://github.com/vbenjs/vue-vben-admin/tree/v2)

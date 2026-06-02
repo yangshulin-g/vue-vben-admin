@@ -18,6 +18,10 @@
 
 Vue Vben Admin is a free and open source middle and back-end template. Using the latest `vue3`, `vite`, `TypeScript` and other mainstream technology development, the out-of-the-box middle and back-end front-end solutions can also be used for learning reference.
 
+## BizPort Agent Guidelines
+
+Project-specific collaboration rules are available in [`docs/AGENTS.md`](docs/AGENTS.md). Read them before changing admin menus, permissions, API integration, or real business data display.
+
 ## Upgrade Notice
 
 This is the latest version, 5.0, and it is not compatible with previous versions. If you are starting a new project, it is recommended to use the latest version. If you wish to view the old version, please use the [v2 branch](https://github.com/vbenjs/vue-vben-admin/tree/v2).
