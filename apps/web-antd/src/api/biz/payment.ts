@@ -23,6 +23,10 @@ export interface ReconciliationPaymentItem {
   tradeType?: string;
   transactionId?: string;
   voucherUrl?: string;
+  createdAt?: string;
+  customerName?: string;
+  orderId?: number;
+  orderNo?: string;
 }
 
 export interface RefundRecordItem {
@@ -85,6 +89,17 @@ export async function getPaymentDetailApi(data: { id: number }) {
     '/api/v1/payment/detail',
     data,
   );
+}
+
+export async function getAuditPaymentListApi(data: {
+  auditStatus?: string;
+  page?: number;
+  size?: number;
+}) {
+  return requestClient.post<{
+    list: ReconciliationPaymentItem[];
+    total: number;
+  }>('/api/v1/payment/audit/list', data);
 }
 
 export async function getOrderPaymentListApi(data: { orderId: number }) {

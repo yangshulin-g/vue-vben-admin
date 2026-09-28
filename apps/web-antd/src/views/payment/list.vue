@@ -32,6 +32,7 @@ import {
   auditRefundApi,
   directCreateRefundApi,
   getAdminOrderListApi,
+  getAuditPaymentListApi,
   getOrderPaymentListApi,
   getOrderReconciliationApi,
   getRefundListApi,
@@ -59,6 +60,7 @@ const form = reactive({
   orderId: undefined as number | undefined,
   orderKeyword: '',
 });
+const pendingMode = ref(false);
 
 const createForm = reactive({
   amount: 0,
@@ -90,6 +92,8 @@ const refundForm = reactive({
 });
 
 const paymentColumns = [
+  { dataIndex: 'orderNo', key: 'orderNo', title: '订单号', width: 180 },
+  { dataIndex: 'customerName', key: 'customerName', title: '客户', width: 140 },
   { dataIndex: 'id', key: 'id', title: '支付记录号', width: 110 },
   {
     dataIndex: 'paymentMethod',
@@ -117,6 +121,13 @@ const paymentColumns = [
     width: 180,
   },
   { dataIndex: 'paymentSn', key: 'paymentSn', title: '流水号', width: 180 },
+  { dataIndex: 'voucherUrl', key: 'voucherUrl', title: '凭证', width: 120 },
+  {
+    dataIndex: 'createdAt',
+    key: 'createdAt',
+    title: '提交时间',
+    width: 180,
+  },
   { dataIndex: 'remark', key: 'remark', title: '备注' },
   { key: 'actions', title: '操作', width: 220 },
 ];
@@ -138,16 +149,22 @@ const refundColumns = [
 
 const paymentStatusColorMap: Record<string, string> = {
   FAILED: 'error',
+  FULLY_PAID: 'success',
   PAID: 'success',
+  PARTIALLY_PAID: 'processing',
   PENDING_CALLBACK: 'processing',
   SUBMITTED: 'warning',
+  UNPAID: 'default',
 };
 
 const paymentStatusTextMap: Record<string, string> = {
   FAILED: '支付失败',
+  FULLY_PAID: '已付清',
   PAID: '已支付',
+  PARTIALLY_PAID: '部分付款',
   PENDING_CALLBACK: '待回调',
   SUBMITTED: '已提交',
+  UNPAID: '未付款',
 };
 
 const auditStatusColorMap: Record<string, string> = {
@@ -207,7 +224,26 @@ async function resolveOrderId() {
   return true;
 }
 
+async function loadPendingPayments() {
+  pendingMode.value = true;
+  loading.value = true;
+  try {
+    const listRes = await getAuditPaymentListApi({
+      auditStatus: 'PENDING',
+      page: 1,
+      size: 50,
+    });
+    detail.value = null;
+    form.orderId = undefined;
+    payments.value = listRes.list || [];
+    refunds.value = [];
+  } finally {
+    loading.value = false;
+  }
+}
+
 async function queryReconciliation() {
+  pendingMode.value = false;
   loading.value = true;
   try {
     const resolved = await resolveOrderId();
@@ -374,7 +410,11 @@ async function submitAudit() {
       message.success('支付记录已驳回');
     }
     auditOpen.value = false;
-    await queryReconciliation();
+    if (pendingMode.value) {
+      await loadPendingPayments();
+    } else {
+      await queryReconciliation();
+    }
   } finally {
     actionLoading.value = false;
   }
@@ -417,16 +457,20 @@ async function doMockConfirm(id?: number) {
             <Button v-if="canProcess()" type="dashed" @click="openCreate">
               新增支付
             </Button>
+            <Button :loading="loading" @click="loadPendingPayments">
+              待审核凭证
+            </Button>
           </Space>
         </Form.Item>
       </Form>
       <div class="mt-3 text-xs text-gray-500">
-        请从订单列表复制订单号后在这里查询支付对账。
+        可按订单号查询对账，或直接查看待审核凭证。
       </div>
     </Card>
 
-    <Card v-if="detail">
+    <Card v-if="detail || pendingMode">
       <Descriptions
+        v-if="detail"
         :column="3"
         bordered
         class="mb-4"
@@ -470,7 +514,7 @@ async function doMockConfirm(id?: number) {
         :columns="paymentColumns"
         :data-source="payments"
         :pagination="false"
-        :scroll="{ x: 1200 }"
+        :scroll="{ x: 1600 }"
         row-key="id"
       >
         <template #bodyCell="{ column, record }">
@@ -499,6 +543,16 @@ async function doMockConfirm(id?: number) {
                 '-'
               }}
             </Tag>
+          </template>
+          <template v-else-if="column.key === 'voucherUrl'">
+            <a
+              v-if="(record as ReconciliationPaymentItem).voucherUrl"
+              :href="(record as ReconciliationPaymentItem).voucherUrl"
+              target="_blank"
+            >
+              查看凭证
+            </a>
+            <span v-else>-</span>
           </template>
           <template v-else-if="column.key === 'auditStatus'">
             <Tag
