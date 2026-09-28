@@ -190,6 +190,16 @@ export async function updateAdminStatusApi(data: {
   );
 }
 
+export async function changeAdminPasswordApi(data: {
+  newPassword: string;
+  oldPassword: string;
+}) {
+  return requestClient.post<{ success?: boolean }>(
+    '/api/v1/system/admin/password/change',
+    data,
+  );
+}
+
 export async function resetAdminPasswordApi(data: {
   adminId: number;
   newPassword: string;

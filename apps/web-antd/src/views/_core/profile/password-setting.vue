@@ -7,6 +7,11 @@ import { ProfilePasswordSetting, z } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
+import { changeAdminPasswordApi } from '#/api';
+import { useAuthStore } from '#/store';
+
+const authStore = useAuthStore();
+
 const formSchema = computed((): VbenFormSchema[] => {
   return [
     {
@@ -23,7 +28,7 @@ const formSchema = computed((): VbenFormSchema[] => {
       component: 'VbenInputPassword',
       componentProps: {
         passwordStrength: true,
-        placeholder: '请输入新密码',
+        placeholder: '8-32位，包含字母和数字',
       },
     },
     {
@@ -50,8 +55,13 @@ const formSchema = computed((): VbenFormSchema[] => {
   ];
 });
 
-function handleSubmit() {
-  message.success('密码修改成功');
+async function handleSubmit(values: Record<string, string | undefined>) {
+  await changeAdminPasswordApi({
+    newPassword: values.newPassword || '',
+    oldPassword: values.oldPassword || '',
+  });
+  message.success('密码已修改，请重新登录');
+  await authStore.logout(false);
 }
 </script>
 <template>

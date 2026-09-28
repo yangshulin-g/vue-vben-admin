@@ -7,6 +7,7 @@ import { Page } from '@vben/common-ui';
 import { useAccessStore } from '@vben/stores';
 
 import {
+  Alert,
   Button,
   Card,
   Descriptions,
@@ -50,6 +51,10 @@ const groupCustomerOptions = ref<Array<{ label: string; value: number }>>([]);
 const detailData = ref<null | QuoteItem>(null);
 const convertQuote = ref<null | QuoteItem>(null);
 const total = ref(0);
+const listError = ref('');
+const detailError = ref('');
+const customerLoadError = ref('');
+const groupLoadError = ref('');
 
 const filters = reactive({
   quoteNo: '',
@@ -134,6 +139,15 @@ const canStatus = () => accessStore.accessCodes.includes('quote:status');
 const canExport = () => accessStore.accessCodes.includes('quote:export');
 const canConvert = () =>
   accessStore.accessCodes.includes('quote:convert-order');
+const canCustomerList = () => accessStore.accessCodes.includes('customer:list');
+const canGroupList = () =>
+  accessStore.accessCodes.includes('customer:group:list');
+
+function readError(error: unknown, fallback: string) {
+  const data = (error as { response?: { data?: { message?: string } } })
+    ?.response?.data;
+  return data?.message || fallback;
+}
 
 const targetTypeOptions = [
   { label: '客户', value: 'CUSTOMER' },
@@ -208,24 +222,54 @@ function removeItem(tempKey: string) {
 }
 
 async function loadCustomers() {
-  const res = await getCustomerListApi({ page: 1, size: 200, status: 1 });
-  customerOptions.value = (res.list ?? []).map((item: CustomerItem) => ({
-    label: `${item.customerName || '-'} (${item.customerCode || '-'})`,
-    value: item.customerId,
-  }));
+  if (!canCustomerList()) {
+    customerOptions.value = [];
+    customerLoadError.value = '';
+    return;
+  }
+  customerLoadError.value = '';
+  try {
+    const res = await getCustomerListApi({ page: 1, size: 200, status: 1 });
+    customerOptions.value = (res.list ?? []).map((item: CustomerItem) => ({
+      label: `${item.customerName || '-'} (${item.customerCode || '-'})`,
+      value: item.customerId,
+    }));
+  } catch (error) {
+    customerOptions.value = [];
+    customerLoadError.value = readError(error, '客户列表加载失败');
+  }
 }
 
 async function loadGroups() {
-  const res = await getCustomerGroupListApi({ page: 1, size: 200, status: 1 });
-  groupOptions.value = (res.list ?? []).map((item: GroupItem) => ({
-    label: `${item.groupName || '-'} (${item.groupCode || '-'})`,
-    value: Number(item.groupId ?? item.id),
-  }));
+  if (!canGroupList()) {
+    groupOptions.value = [];
+    groupLoadError.value = '';
+    return;
+  }
+  groupLoadError.value = '';
+  try {
+    const res = await getCustomerGroupListApi({ page: 1, size: 200 });
+    groupOptions.value = (res.list ?? [])
+      .filter((item: GroupItem) => item.enabled !== 0)
+      .map((item: GroupItem) => ({
+        label: `${item.groupName || '-'} (${item.groupCode || '-'})`,
+        value: Number(item.groupId ?? item.id),
+      }));
+  } catch (error) {
+    groupOptions.value = [];
+    groupLoadError.value = readError(error, '客户分组加载失败');
+  }
 }
 
 async function loadData() {
-  if (!canList()) return;
+  if (!canList()) {
+    dataSource.value = [];
+    total.value = 0;
+    listError.value = '';
+    return;
+  }
   loading.value = true;
+  listError.value = '';
   try {
     const res = await getQuoteListApi({
       page: pagination.current,
@@ -236,6 +280,10 @@ async function loadData() {
     });
     dataSource.value = res.list ?? [];
     total.value = res.total ?? 0;
+  } catch (error) {
+    dataSource.value = [];
+    total.value = 0;
+    listError.value = readError(error, '报价单列表加载失败');
   } finally {
     loading.value = false;
   }
@@ -263,6 +311,8 @@ function onTableChange(page: number, pageSize: number) {
 function openCreate() {
   resetCreateForm();
   createOpen.value = true;
+  loadCustomers();
+  loadGroups();
 }
 
 async function submitCreate() {
@@ -312,11 +362,18 @@ async function submitCreate() {
 }
 
 async function openDetail(record: any) {
-  if (!canDetail()) return;
+  if (!canDetail()) {
+    message.warning('当前账号没有报价单详情权限（quote:detail）');
+    return;
+  }
   detailOpen.value = true;
   detailLoading.value = true;
+  detailError.value = '';
+  detailData.value = null;
   try {
     detailData.value = await getQuoteDetailApi({ id: record.id });
+  } catch (error) {
+    detailError.value = readError(error, '报价单详情加载失败');
   } finally {
     detailLoading.value = false;
   }
@@ -343,16 +400,28 @@ async function exportQuote(record: any) {
 }
 
 async function openConvert(record: Partial<QuoteItem>) {
-  if (!canConvert()) return;
+  if (!canConvert()) {
+    message.warning('当前账号没有报价单转订单权限（quote:convert-order）');
+    return;
+  }
+  if (!canDetail()) {
+    message.warning('转订单需要报价单详情权限（quote:detail）');
+    return;
+  }
   if (!record.id) {
     message.warning('报价单信息不完整');
     return;
   }
-  convertQuote.value = await getQuoteDetailApi({ id: record.id });
   convertForm.customerId = undefined;
   convertForm.customerRemark = '';
   convertForm.bizRemark = '';
   groupCustomerOptions.value = [];
+  groupLoadError.value = '';
+  try {
+    convertQuote.value = await getQuoteDetailApi({ id: record.id });
+  } catch {
+    return;
+  }
 
   if (convertQuote.value.targetType === 'CUSTOMER_GROUP') {
     const groupId = convertQuote.value.customerGroupId;
@@ -360,11 +429,22 @@ async function openConvert(record: Partial<QuoteItem>) {
       message.warning('报价单缺少客户分组信息');
       return;
     }
-    const res = await getGroupCustomersApi(groupId, 1, 200);
-    groupCustomerOptions.value = (res.list ?? []).map((item: CustomerItem) => ({
-      label: `${item.customerName || '-'} (${item.customerCode || '-'})`,
-      value: item.customerId,
-    }));
+    if (canGroupList()) {
+      try {
+        const res = await getGroupCustomersApi(groupId, 1, 200);
+        groupCustomerOptions.value = (res.list ?? []).map(
+          (item: CustomerItem) => ({
+            label: `${item.customerName || '-'} (${item.customerCode || '-'})`,
+            value: item.customerId,
+          }),
+        );
+      } catch (error) {
+        groupLoadError.value = readError(error, '分组成员加载失败');
+      }
+    } else {
+      groupLoadError.value =
+        '选择分组客户需要客户分组成员权限（customer:group:list）';
+    }
   }
 
   convertOpen.value = true;
@@ -398,13 +478,25 @@ async function submitConvert() {
   }
 }
 
-loadCustomers();
-loadGroups();
 loadData();
 </script>
 
 <template>
   <Page title="报价单">
+    <Alert
+      v-if="!canList()"
+      class="mb-4"
+      message="当前账号没有报价单列表权限（quote:list），无法查询。"
+      show-icon
+      type="warning"
+    />
+    <Alert
+      v-else-if="listError"
+      class="mb-4"
+      :message="listError"
+      show-icon
+      type="error"
+    />
     <Card class="mb-4">
       <Form layout="inline">
         <Form.Item label="报价单号">
@@ -437,7 +529,9 @@ loadData();
             <Button v-if="canCreate()" type="dashed" @click="openCreate">
               新增报价
             </Button>
-            <Button type="primary" @click="onSearch">查询</Button>
+            <Button :disabled="!canList()" type="primary" @click="onSearch">
+              查询
+            </Button>
             <Button @click="onReset">重置</Button>
           </Space>
         </Form.Item>
@@ -449,6 +543,7 @@ loadData();
         :columns="columns"
         :data-source="dataSource"
         :loading="loading"
+        :locale="{ emptyText: listError ? '列表加载失败' : '暂无报价单' }"
         :pagination="{
           current: pagination.current,
           pageSize: pagination.pageSize,
@@ -523,6 +618,38 @@ loadData();
             "
           />
         </Form.Item>
+        <Alert
+          v-if="createForm.targetType === 'CUSTOMER' && !canCustomerList()"
+          class="mb-3"
+          message="选择客户需要客户列表权限（customer:list）。"
+          show-icon
+          type="warning"
+        />
+        <Alert
+          v-else-if="
+            createForm.targetType === 'CUSTOMER_GROUP' && !canGroupList()
+          "
+          class="mb-3"
+          message="选择客户分组需要分组列表权限（customer:group:list）。"
+          show-icon
+          type="warning"
+        />
+        <Alert
+          v-else-if="createForm.targetType === 'CUSTOMER' && customerLoadError"
+          class="mb-3"
+          :message="customerLoadError"
+          show-icon
+          type="error"
+        />
+        <Alert
+          v-else-if="
+            createForm.targetType === 'CUSTOMER_GROUP' && groupLoadError
+          "
+          class="mb-3"
+          :message="groupLoadError"
+          show-icon
+          type="error"
+        />
         <Form.Item
           v-if="createForm.targetType === 'CUSTOMER'"
           label="客户"
@@ -530,6 +657,9 @@ loadData();
         >
           <Select
             v-model:value="createForm.customerId"
+            :not-found-content="
+              customerOptions.length > 0 ? undefined : '暂无可用客户'
+            "
             :options="customerOptions"
             placeholder="请选择客户"
             show-search
@@ -538,6 +668,9 @@ loadData();
         <Form.Item v-else label="客户分组" required>
           <Select
             v-model:value="createForm.customerGroupId"
+            :not-found-content="
+              groupOptions.length > 0 ? undefined : '暂无可用客户分组'
+            "
             :options="groupOptions"
             placeholder="请选择客户分组"
             show-search
@@ -607,6 +740,13 @@ loadData();
       title="报价单详情"
       width="860px"
     >
+      <Alert
+        v-if="detailError"
+        class="mb-3"
+        :message="detailError"
+        show-icon
+        type="error"
+      />
       <Descriptions v-if="detailData" bordered :column="2" size="small">
         <Descriptions.Item label="报价单号">
           {{ detailData.quoteNo }}
@@ -626,6 +766,9 @@ loadData();
         :columns="itemColumns"
         :data-source="detailData?.items || []"
         :loading="detailLoading"
+        :locale="{
+          emptyText: detailError ? '详情加载失败' : '暂无报价明细',
+        }"
         :pagination="false"
         row-key="id"
         size="small"
@@ -643,6 +786,13 @@ loadData();
         <Form.Item label="报价对象">
           {{ targetText(convertQuote) }}
         </Form.Item>
+        <Alert
+          v-if="groupLoadError"
+          class="mb-3"
+          :message="groupLoadError"
+          show-icon
+          type="warning"
+        />
         <Form.Item
           v-if="convertQuote?.targetType === 'CUSTOMER_GROUP'"
           label="客户"
@@ -650,6 +800,9 @@ loadData();
         >
           <Select
             v-model:value="convertForm.customerId"
+            :not-found-content="
+              groupCustomerOptions.length > 0 ? undefined : '该分组下暂无客户'
+            "
             :options="groupCustomerOptions"
             placeholder="请选择该分组下客户"
             show-search

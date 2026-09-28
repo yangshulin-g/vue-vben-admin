@@ -375,8 +375,12 @@ loadData();
         <Form.Item label="用户名" required>
           <Input v-model:value="createForm.username" />
         </Form.Item>
-        <Form.Item label="密码" required>
-          <Input v-model:value="createForm.password" type="password" />
+        <Form.Item label="密码" required extra="8-32位，包含字母和数字">
+          <Input
+            v-model:value="createForm.password"
+            placeholder="8-32位，包含字母和数字"
+            type="password"
+          />
         </Form.Item>
         <Form.Item label="昵称">
           <Input v-model:value="createForm.nickname" />
@@ -433,8 +437,12 @@ loadData();
       @ok="submitResetPwd"
     >
       <Form layout="vertical">
-        <Form.Item label="新密码" required>
-          <Input v-model:value="resetForm.newPassword" type="password" />
+        <Form.Item label="新密码" required extra="8-32位，包含字母和数字">
+          <Input
+            v-model:value="resetForm.newPassword"
+            placeholder="8-32位，包含字母和数字"
+            type="password"
+          />
         </Form.Item>
       </Form>
     </Modal>
