@@ -7,6 +7,7 @@ import { Page } from '@vben/common-ui';
 import { useAccessStore } from '@vben/stores';
 
 import {
+  Alert,
   Button,
   Card,
   Descriptions,
@@ -41,6 +42,8 @@ const total = ref(0);
 const saveOpen = ref(false);
 const detailOpen = ref(false);
 const detailData = ref<null | PromotionItem>(null);
+const listError = ref('');
+const detailError = ref('');
 
 const filters = reactive({
   activityName: '',
@@ -118,6 +121,12 @@ const canCreate = () => accessStore.accessCodes.includes('promotion:create');
 const canUpdate = () => accessStore.accessCodes.includes('promotion:update');
 const canStatus = () => accessStore.accessCodes.includes('promotion:status');
 
+function readError(error: unknown, fallback: string) {
+  const data = (error as { response?: { data?: { message?: string } } })
+    ?.response?.data;
+  return data?.message || fallback;
+}
+
 function createEmptySkuItem() {
   return {
     activityPrice: 0,
@@ -154,8 +163,14 @@ function removeSkuItem(tempKey: string) {
 }
 
 async function loadData() {
-  if (!canList()) return;
+  if (!canList()) {
+    dataSource.value = [];
+    total.value = 0;
+    listError.value = '';
+    return;
+  }
   loading.value = true;
+  listError.value = '';
   try {
     const res = await getPromotionListApi({
       activityName: filters.activityName || undefined,
@@ -166,6 +181,10 @@ async function loadData() {
     });
     dataSource.value = res.list ?? [];
     total.value = res.total ?? 0;
+  } catch (error) {
+    dataSource.value = [];
+    total.value = 0;
+    listError.value = readError(error, '营销活动列表加载失败');
   } finally {
     loading.value = false;
   }
@@ -196,8 +215,20 @@ function openCreate() {
 }
 
 async function openEdit(record: any) {
-  if (!canUpdate()) return;
-  const detail = await getPromotionDetailApi({ id: record.id });
+  if (!canUpdate()) {
+    message.warning('当前账号没有编辑营销活动权限（promotion:update）');
+    return;
+  }
+  if (!canDetail()) {
+    message.warning('编辑活动需要详情权限（promotion:detail）');
+    return;
+  }
+  let detail: PromotionItem;
+  try {
+    detail = await getPromotionDetailApi({ id: record.id });
+  } catch {
+    return;
+  }
   saveForm.id = detail.id;
   saveForm.activityName = detail.activityName || '';
   saveForm.activityType = detail.activityType || 'FULL_REDUCTION';
@@ -218,6 +249,15 @@ async function openEdit(record: any) {
 function buildSavePayload() {
   if (!saveForm.activityName.trim()) {
     throw new Error('请填写活动名称');
+  }
+  if (
+    saveForm.activityType === 'FULL_REDUCTION' &&
+    (saveForm.thresholdAmount === undefined ||
+      saveForm.thresholdAmount === null ||
+      saveForm.discountAmount === undefined ||
+      saveForm.discountAmount === null)
+  ) {
+    throw new Error('满减活动必须填写门槛金额和优惠金额');
   }
   const payload = {
     activityName: saveForm.activityName.trim(),
@@ -245,9 +285,15 @@ function buildSavePayload() {
 }
 
 async function submitSave() {
+  let payload: ReturnType<typeof buildSavePayload>;
+  try {
+    payload = buildSavePayload();
+  } catch (error: unknown) {
+    message.warning(error instanceof Error ? error.message : '请检查活动表单');
+    return;
+  }
   saveLoading.value = true;
   try {
-    const payload = buildSavePayload();
     if (saveForm.id) {
       await updatePromotionApi({ ...payload, id: saveForm.id });
       message.success('营销活动已更新');
@@ -257,19 +303,26 @@ async function submitSave() {
     }
     saveOpen.value = false;
     await loadData();
-  } catch (error: any) {
-    message.error(error?.message || '保存失败');
+  } catch {
+    // 接口错误由请求拦截器提示，保留弹窗便于修正
   } finally {
     saveLoading.value = false;
   }
 }
 
 async function openDetail(record: any) {
-  if (!canDetail()) return;
+  if (!canDetail()) {
+    message.warning('当前账号没有营销活动详情权限（promotion:detail）');
+    return;
+  }
   detailOpen.value = true;
   detailLoading.value = true;
+  detailError.value = '';
+  detailData.value = null;
   try {
     detailData.value = await getPromotionDetailApi({ id: record.id });
+  } catch (error) {
+    detailError.value = readError(error, '营销活动详情加载失败');
   } finally {
     detailLoading.value = false;
   }
@@ -291,6 +344,20 @@ loadData();
 
 <template>
   <Page title="营销活动">
+    <Alert
+      v-if="!canList()"
+      class="mb-4"
+      message="当前账号没有营销活动列表权限（promotion:list），无法查询。"
+      show-icon
+      type="warning"
+    />
+    <Alert
+      v-else-if="listError"
+      class="mb-4"
+      :message="listError"
+      show-icon
+      type="error"
+    />
     <Card class="mb-4">
       <Form layout="inline">
         <Form.Item label="活动名称">
@@ -323,7 +390,9 @@ loadData();
             <Button v-if="canCreate()" type="dashed" @click="openCreate">
               新增活动
             </Button>
-            <Button type="primary" @click="onSearch">查询</Button>
+            <Button :disabled="!canList()" type="primary" @click="onSearch">
+              查询
+            </Button>
             <Button @click="onReset">重置</Button>
           </Space>
         </Form.Item>
@@ -335,6 +404,7 @@ loadData();
         :columns="columns"
         :data-source="dataSource"
         :loading="loading"
+        :locale="{ emptyText: listError ? '列表加载失败' : '暂无营销活动' }"
         :pagination="{
           current: pagination.current,
           pageSize: pagination.pageSize,
@@ -475,6 +545,13 @@ loadData();
       title="营销活动详情"
       width="760px"
     >
+      <Alert
+        v-if="detailError"
+        class="mb-3"
+        :message="detailError"
+        show-icon
+        type="error"
+      />
       <Descriptions v-if="detailData" bordered :column="2" size="small">
         <Descriptions.Item label="活动名称">
           {{ detailData.activityName }}
@@ -496,6 +573,9 @@ loadData();
         :columns="skuColumns"
         :data-source="detailData?.skuItems || []"
         :loading="detailLoading"
+        :locale="{
+          emptyText: detailError ? '详情加载失败' : '暂无限时价 SKU',
+        }"
         :pagination="false"
         row-key="id"
         size="small"
