@@ -410,11 +410,7 @@ async function submitAudit() {
       message.success('支付记录已驳回');
     }
     auditOpen.value = false;
-    if (pendingMode.value) {
-      await loadPendingPayments();
-    } else {
-      await queryReconciliation();
-    }
+    await (pendingMode.value ? loadPendingPayments() : queryReconciliation());
   } finally {
     actionLoading.value = false;
   }
