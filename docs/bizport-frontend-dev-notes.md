@@ -581,3 +581,20 @@
   - “新增支付”改为依赖已查询出来的订单详情，避免只输入了文本但未完成有效查询时直接打开录入流程
 - 体验补充
   - 页面新增帮助文案，明确支持从订单列表复制订单号后直接查询
+
+## 19. 报价 / 营销 / 备货 / 统计验收修复
+
+页面仍走真实接口，没有用本地数据掩盖失败。缺列表权限或接口失败时，页面上会留下警告或错误提示；空列表使用明确空态文案。
+
+- 报价单 `views/order/quote.vue`：列表、详情、创建、导出、转订单权限码与后端一致（`quote:list` / `quote:detail` / `quote:create` / `quote:status` / `quote:export` / `quote:convert-order`）。创建时才拉取客户或分组，并提示缺少 `customer:list`、`customer:group:list`。
+- 营销活动 `views/product/promotion.vue`：满减、限时价，以及启用 / 暂停 / 结束仍走 `promotion:status`。表单在提交前校验满减门槛和限时价 SKU。
+- 备货单 `views/order/fulfillment.vue`：来源 `MANUAL` / `AUTO_SHORTAGE` 显示为中文；进度日志状态同样中文化。
+- 统计：收款方式表对齐后端字段 `paymentMethod`、`amount`。三张统计页分别校验 `statistics:sales`、`statistics:inventory`、`statistics:payment`。
+
+后端缺口（本轮只记录，未改后端）：
+
+- 销售统计的「总客户数」是全部未删除客户，不是所选日期内的下单客户。
+- 收款统计只汇总 `paymentStatus=PAID` 的记录，待审核收款不会出现在金额和笔数里。
+- 客户分组列表接口没有启用状态筛选，前端创建报价时自行排除 `enabled=0`。
+- 报价单转订单成功后，报价单状态不会自动变成已接受。
+- 备货进度日志的记录人在服务端写死为「系统」。

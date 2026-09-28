@@ -7,6 +7,7 @@ import { Page } from '@vben/common-ui';
 import { useAccessStore } from '@vben/stores';
 
 import {
+  Alert,
   Button,
   Card,
   Descriptions,
@@ -38,6 +39,8 @@ const detailOpen = ref(false);
 const detailData = ref<FulfillmentItem | null>(null);
 const dataSource = ref<FulfillmentItem[]>([]);
 const total = ref(0);
+const listError = ref('');
+const detailError = ref('');
 
 const filters = reactive({
   orderNo: '',
@@ -76,6 +79,7 @@ const statusText: Record<string, string> = {
   COMPLETED: '已完成',
   IN_PROGRESS: '备货中',
   PENDING: '待备货',
+  PROCESSING: '备货中',
 };
 
 const statusColor: Record<string, string> = {
@@ -83,7 +87,18 @@ const statusColor: Record<string, string> = {
   COMPLETED: 'success',
   IN_PROGRESS: 'processing',
   PENDING: 'warning',
+  PROCESSING: 'processing',
 };
+
+const sourceText: Record<string, string> = {
+  AUTO_SHORTAGE: '缺货自动生成',
+  MANUAL: '手动生成',
+};
+
+function sourceLabel(source?: string) {
+  if (!source) return '-';
+  return sourceText[source] || source;
+}
 
 const columns = [
   { dataIndex: 'fulfillmentNo', key: 'fulfillmentNo', title: '备货单号' },
@@ -117,9 +132,21 @@ const canUpdateStatus = () =>
   accessStore.accessCodes.includes('fulfillment:status');
 const canLog = () => accessStore.accessCodes.includes('fulfillment:log');
 
+function readError(error: unknown, fallback: string) {
+  const data = (error as { response?: { data?: { message?: string } } })
+    ?.response?.data;
+  return data?.message || fallback;
+}
+
 async function loadData() {
-  if (!canList()) return;
+  if (!canList()) {
+    dataSource.value = [];
+    total.value = 0;
+    listError.value = '';
+    return;
+  }
   loading.value = true;
+  listError.value = '';
   try {
     const res = await getFulfillmentListApi({
       orderNo: filters.orderNo || undefined,
@@ -129,6 +156,10 @@ async function loadData() {
     });
     dataSource.value = res.list ?? [];
     total.value = res.total ?? 0;
+  } catch (error) {
+    dataSource.value = [];
+    total.value = 0;
+    listError.value = readError(error, '备货单列表加载失败');
   } finally {
     loading.value = false;
   }
@@ -153,9 +184,14 @@ function onTableChange(page: number, pageSize: number) {
 }
 
 async function openDetail(record: any) {
-  if (!canDetail()) return;
+  if (!canDetail()) {
+    message.warning('当前账号没有备货单详情权限（fulfillment:detail）');
+    return;
+  }
   detailOpen.value = true;
   detailLoading.value = true;
+  detailError.value = '';
+  detailData.value = null;
   statusForm.status =
     record.status === 'PROCESSING'
       ? 'IN_PROGRESS'
@@ -167,6 +203,8 @@ async function openDetail(record: any) {
     updateForm.planStartAt = detailData.value.planStartAt || '';
     updateForm.planFinishAt = detailData.value.planFinishAt || '';
     updateForm.remark = detailData.value.remark || '';
+  } catch (error) {
+    detailError.value = readError(error, '备货单详情加载失败');
   } finally {
     detailLoading.value = false;
   }
@@ -239,6 +277,20 @@ loadData();
 
 <template>
   <Page title="备货单">
+    <Alert
+      v-if="!canList()"
+      class="mb-4"
+      message="当前账号没有备货单列表权限（fulfillment:list），无法查询。"
+      show-icon
+      type="warning"
+    />
+    <Alert
+      v-else-if="listError"
+      class="mb-4"
+      :message="listError"
+      show-icon
+      type="error"
+    />
     <Card class="mb-4">
       <Form layout="inline">
         <Form.Item label="订单号">
@@ -259,7 +311,9 @@ loadData();
         </Form.Item>
         <Form.Item>
           <Space>
-            <Button type="primary" @click="onSearch">查询</Button>
+            <Button :disabled="!canList()" type="primary" @click="onSearch">
+              查询
+            </Button>
             <Button @click="onReset">重置</Button>
           </Space>
         </Form.Item>
@@ -271,6 +325,7 @@ loadData();
         :columns="columns"
         :data-source="dataSource"
         :loading="loading"
+        :locale="{ emptyText: listError ? '列表加载失败' : '暂无备货单' }"
         :pagination="{
           current: pagination.current,
           pageSize: pagination.pageSize,
@@ -282,7 +337,10 @@ loadData();
         row-key="id"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'status'">
+          <template v-if="column.key === 'source'">
+            {{ sourceLabel(record.source) }}
+          </template>
+          <template v-else-if="column.key === 'status'">
             <Tag :color="statusColor[record.status] || 'default'">
               {{ statusText[record.status] || record.status || '-' }}
             </Tag>
@@ -303,6 +361,12 @@ loadData();
       width="920px"
     >
       <Space direction="vertical" style="width: 100%">
+        <Alert
+          v-if="detailError"
+          :message="detailError"
+          show-icon
+          type="error"
+        />
         <Descriptions v-if="detailData" bordered :column="2" size="small">
           <Descriptions.Item label="备货单号">
             {{ detailData.fulfillmentNo }}
@@ -311,7 +375,10 @@ loadData();
             {{ detailData.orderNo }}
           </Descriptions.Item>
           <Descriptions.Item label="客户">
-            {{ detailData.customerName }}
+            {{ detailData.customerName || '-' }}
+          </Descriptions.Item>
+          <Descriptions.Item label="来源">
+            {{ sourceLabel(detailData.source) }}
           </Descriptions.Item>
           <Descriptions.Item label="状态">
             {{ statusText[detailData.status || ''] || detailData.status }}
@@ -322,7 +389,7 @@ loadData();
           <Descriptions.Item label="计划完成">
             {{ detailData.planFinishAt || '-' }}
           </Descriptions.Item>
-          <Descriptions.Item label="备注" :span="2">
+          <Descriptions.Item label="备注">
             {{ detailData.remark || '-' }}
           </Descriptions.Item>
         </Descriptions>
@@ -331,6 +398,9 @@ loadData();
           :columns="itemColumns"
           :data-source="detailData?.items || []"
           :loading="detailLoading"
+          :locale="{
+            emptyText: detailError ? '详情加载失败' : '暂无备货明细',
+          }"
           :pagination="false"
           row-key="id"
           size="small"
@@ -364,6 +434,13 @@ loadData();
         </Card>
 
         <Card size="small" title="进度处理">
+          <Alert
+            v-if="!canUpdateStatus() && !canLog()"
+            class="mb-3"
+            message="当前账号没有更新状态（fulfillment:status）或记录进度（fulfillment:log）的权限。"
+            show-icon
+            type="warning"
+          />
           <Space wrap>
             <Select
               v-model:value="statusForm.status"
@@ -399,10 +476,17 @@ loadData();
         <Table
           :columns="logColumns"
           :data-source="detailData?.logs || []"
+          :locale="{ emptyText: '暂无进度记录' }"
           :pagination="false"
           row-key="id"
           size="small"
-        />
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'status'">
+              {{ statusText[record.status] || record.status || '-' }}
+            </template>
+          </template>
+        </Table>
       </Space>
     </Modal>
   </Page>

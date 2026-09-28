@@ -35,9 +35,9 @@ export interface InventoryStatisticsRes {
 
 export interface PaymentStatisticsRes {
   paymentMethodStats?: Array<{
+    amount?: number;
     count?: number;
-    method?: string;
-    totalAmount?: number;
+    paymentMethod?: string;
   }>;
   totalPaymentAmount?: number;
   totalPaymentCount?: number;
