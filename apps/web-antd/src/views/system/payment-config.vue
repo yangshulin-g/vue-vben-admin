@@ -30,7 +30,7 @@ defineOptions({ name: 'SystemPaymentConfigPage' });
 
 const accessStore = useAccessStore();
 const PAY_TIMEOUT_MIN = 1;
-const PAY_TIMEOUT_MAX = 10080;
+const PAY_TIMEOUT_MAX = 10_080;
 const PAY_TIMEOUT_DEFAULT = 1440;
 
 const loading = ref(false);
