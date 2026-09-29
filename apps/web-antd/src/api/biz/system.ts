@@ -130,6 +130,17 @@ export interface StorageConfigDetail {
     endpoint?: string;
     secretKey?: string;
   };
+  garage: {
+    accessKey?: string;
+    bucket?: string;
+    endpoint?: string;
+    region?: string;
+    secretKey?: string;
+  };
+}
+
+export interface PaymentTimeoutConfig {
+  payTimeoutMinutes?: number;
 }
 
 export interface PaymentConfigDetail {
@@ -443,5 +454,19 @@ export async function testPaymentConfigApi(data: PaymentConfigDetail) {
   return requestClient.post<{ success?: boolean }>(
     '/api/v1/system/payment-config/test',
     data,
+  );
+}
+
+export async function getPaymentTimeoutConfigApi() {
+  return requestClient.post<PaymentTimeoutConfig>(
+    '/api/v1/system/payment-config/timeout/detail',
+    {},
+  );
+}
+
+export async function updatePaymentTimeoutConfigApi(payTimeoutMinutes: number) {
+  return requestClient.post<PaymentTimeoutConfig>(
+    '/api/v1/system/payment-config/timeout/update',
+    { payTimeoutMinutes },
   );
 }

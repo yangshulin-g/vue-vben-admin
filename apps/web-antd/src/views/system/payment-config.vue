@@ -12,6 +12,7 @@ import {
   Card,
   Form,
   Input,
+  InputNumber,
   message,
   Space,
   Switch,
@@ -19,16 +20,26 @@ import {
 
 import {
   getPaymentConfigDetailApi,
+  getPaymentTimeoutConfigApi,
   testPaymentConfigApi,
   updatePaymentConfigApi,
+  updatePaymentTimeoutConfigApi,
 } from '#/api';
 
 defineOptions({ name: 'SystemPaymentConfigPage' });
 
 const accessStore = useAccessStore();
+const PAY_TIMEOUT_MIN = 1;
+const PAY_TIMEOUT_MAX = 10080;
+const PAY_TIMEOUT_DEFAULT = 1440;
+
 const loading = ref(false);
 const saving = ref(false);
 const testing = ref(false);
+const timeoutLoading = ref(false);
+const timeoutSaving = ref(false);
+const payTimeoutMinutes = ref<number>(PAY_TIMEOUT_DEFAULT);
+const timeoutError = ref('');
 
 const formState = reactive<PaymentConfigDetail>({
   apiV3Key: '',
@@ -71,6 +82,53 @@ async function loadDetail() {
   }
 }
 
+async function loadTimeout() {
+  if (!canDetail()) return;
+  timeoutLoading.value = true;
+  timeoutError.value = '';
+  try {
+    const detail = await getPaymentTimeoutConfigApi();
+    const minutes = Number(detail?.payTimeoutMinutes);
+    payTimeoutMinutes.value =
+      Number.isInteger(minutes) &&
+      minutes >= PAY_TIMEOUT_MIN &&
+      minutes <= PAY_TIMEOUT_MAX
+        ? minutes
+        : PAY_TIMEOUT_DEFAULT;
+  } catch {
+    timeoutError.value = '支付时限加载失败';
+  } finally {
+    timeoutLoading.value = false;
+  }
+}
+
+async function saveTimeout() {
+  if (!canUpdate()) return;
+  const minutes = Number(payTimeoutMinutes.value);
+  if (
+    !Number.isInteger(minutes) ||
+    minutes < PAY_TIMEOUT_MIN ||
+    minutes > PAY_TIMEOUT_MAX
+  ) {
+    message.error('支付时限必须是 1 到 10080 之间的整数分钟');
+    return;
+  }
+  timeoutSaving.value = true;
+  timeoutError.value = '';
+  try {
+    const detail = await updatePaymentTimeoutConfigApi(minutes);
+    const saved = Number(detail?.payTimeoutMinutes);
+    if (Number.isInteger(saved)) {
+      payTimeoutMinutes.value = saved;
+    }
+    message.success('支付时限已保存');
+  } catch {
+    // 全局拦截器已展示具体错误
+  } finally {
+    timeoutSaving.value = false;
+  }
+}
+
 async function saveConfig() {
   if (!canUpdate()) return;
   saving.value = true;
@@ -99,6 +157,7 @@ async function testConfig() {
 }
 
 loadDetail();
+loadTimeout();
 </script>
 
 <template>
@@ -109,6 +168,40 @@ loadDetail();
       show-icon
       type="warning"
     />
+
+    <Card class="mb-4" :loading="timeoutLoading" title="订单支付时限">
+      <Form layout="vertical">
+        <Form.Item
+          extra="从订单创建时间起算，与留货截止无关。默认 1440 分钟（24 小时），可填 1 到 10080 分钟。"
+          label="支付时限（分钟）"
+        >
+          <InputNumber
+            v-model:value="payTimeoutMinutes"
+            :disabled="!canUpdate()"
+            :max="PAY_TIMEOUT_MAX"
+            :min="PAY_TIMEOUT_MIN"
+            :precision="0"
+            :step="1"
+            class="w-64"
+          />
+        </Form.Item>
+        <Alert
+          v-if="timeoutError"
+          class="mb-4"
+          :message="timeoutError"
+          show-icon
+          type="error"
+        />
+        <Button
+          :disabled="!canUpdate()"
+          :loading="timeoutSaving"
+          type="primary"
+          @click="saveTimeout"
+        >
+          保存支付时限
+        </Button>
+      </Form>
+    </Card>
 
     <Card :loading="loading">
       <Form layout="vertical">

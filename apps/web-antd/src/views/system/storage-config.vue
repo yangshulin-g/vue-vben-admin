@@ -35,6 +35,7 @@ const providerOptions = [
   { label: '阿里云 OSS', value: 'aliyun-oss' },
   { label: '腾讯云 COS', value: 'tencent-cos' },
   { label: 'MinIO', value: 'minio' },
+  { label: 'Garage', value: 'garage' },
 ];
 
 function createDefaultState(): StorageConfigDetail {
@@ -69,6 +70,13 @@ function createDefaultState(): StorageConfigDetail {
       endpoint: '',
       secretKey: '',
     },
+    garage: {
+      accessKey: '',
+      bucket: '',
+      endpoint: '',
+      region: '',
+      secretKey: '',
+    },
   };
 }
 
@@ -84,6 +92,7 @@ const isLocal = computed(() => formState.provider === 'local');
 const isAliyun = computed(() => formState.provider === 'aliyun-oss');
 const isTencent = computed(() => formState.provider === 'tencent-cos');
 const isMinio = computed(() => formState.provider === 'minio');
+const isGarage = computed(() => formState.provider === 'garage');
 
 function applyDetail(detail: StorageConfigDetail) {
   const defaults = createDefaultState();
@@ -91,6 +100,7 @@ function applyDetail(detail: StorageConfigDetail) {
     ...detail,
     aliyun: { ...defaults.aliyun, ...detail.aliyun },
     local: { ...defaults.local, ...detail.local },
+    garage: { ...defaults.garage, ...detail.garage },
     minio: { ...defaults.minio, ...detail.minio },
     tencent: { ...defaults.tencent, ...detail.tencent },
   });
@@ -102,6 +112,7 @@ function buildPayload(): StorageConfigDetail {
     local: { ...formState.local },
     aliyun: { ...formState.aliyun },
     tencent: { ...formState.tencent },
+    garage: { ...formState.garage },
     minio: { ...formState.minio },
   };
 }
@@ -309,6 +320,42 @@ loadDetail();
                 v-model:value="formState.minio.dirPrefix"
                 :disabled="!canUpdate()"
                 placeholder="可选"
+              />
+            </Form.Item>
+          </template>
+
+          <template v-if="isGarage">
+            <Form.Item label="地址">
+              <Input
+                v-model:value="formState.garage.endpoint"
+                :disabled="!canUpdate()"
+                placeholder="例如 http://127.0.0.1:3900"
+              />
+            </Form.Item>
+            <Form.Item label="区域">
+              <Input
+                v-model:value="formState.garage.region"
+                :disabled="!canUpdate()"
+                placeholder="留空则使用 garage"
+              />
+            </Form.Item>
+            <Form.Item label="桶">
+              <Input
+                v-model:value="formState.garage.bucket"
+                :disabled="!canUpdate()"
+              />
+            </Form.Item>
+            <Form.Item label="Access Key">
+              <Input
+                v-model:value="formState.garage.accessKey"
+                :disabled="!canUpdate()"
+              />
+            </Form.Item>
+            <Form.Item label="Secret Key">
+              <Input.Password
+                v-model:value="formState.garage.secretKey"
+                :disabled="!canUpdate()"
+                placeholder="留空或 ******** 表示保留原值"
               />
             </Form.Item>
           </template>

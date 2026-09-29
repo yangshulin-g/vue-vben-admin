@@ -64,6 +64,7 @@ const providerOptions = [
   { label: '阿里云 OSS', value: 'aliyun-oss' },
   { label: '腾讯云 COS', value: 'tencent-cos' },
   { label: 'MinIO', value: 'minio' },
+  { label: 'Garage', value: 'garage' },
 ];
 
 const assetTypeOptions = [
