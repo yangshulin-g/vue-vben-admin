@@ -145,7 +145,7 @@
 - Real products must include a product code, name, business description, category, unit, status, main image, SKU list, prices, stock, and realistic specs such as `color`, `size`, and `material`.
 - Product and order specs shown to users should be localized: `color -> 颜色`, `size -> 尺码`, `material -> 材质`. Avoid exposing electronics-specific keys such as `storage`, `memory`, `processor`, or `resolution` for apparel products.
 - If there is no real sales metric, do not show `已售 0`. Prefer true inventory language such as `现货` or `仓库现货` based on backend stock.
-- Current storage provider is MinIO (`storage.provider=minio`). Product images should be uploaded through backend storage/file upload flows and persisted as MinIO URLs in `product_info.main_image`, `product_image.image_url`, and `product_sku_info.sku_image`; do not use long-term H5 local static image fallbacks.
+- Remote object storage already uses the independent provider Garage. Do not reuse `storage.minio.*`. Product images should be uploaded through backend storage/file upload flows and persisted in `product_info.main_image`, `product_image.image_url`, and `product_sku_info.sku_image`; do not use long-term H5 local static image fallbacks.
 - H5 `uni-image` must be visually verified in the browser. A URL returning `200` is not enough; inspect rendered `uni-image` and confirm its inner `background-image` is not `none`.
 - Prefer PNG/JPG/WebP product images for H5. SVG may be accessible by URL but still fail to render reliably in `uni-image`.
 
